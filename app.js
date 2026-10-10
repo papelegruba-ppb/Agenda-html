@@ -18,7 +18,7 @@ const views = {
 };
 
 const root = document.getElementById("view-root");
-const buttons = document.querySelectorAll(".view-switch button");
+const buttons = document.querySelectorAll("[data-view]");
 
 async function navigate(view) {
   buttons.forEach(b => b.toggleAttribute("aria-current", b.dataset.view === view));
@@ -37,6 +37,6 @@ document.addEventListener("navigate-day", e => {
   await initDB();
   navigate("day");
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js");
+    navigator.serviceWorker.register("sw.js").catch(() => {});
   }
 })();
