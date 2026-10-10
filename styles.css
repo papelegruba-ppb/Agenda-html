@@ -200,7 +200,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
   font-weight: 600;
   cursor: pointer;
   padding: 0;
-  transition: width .2s ease, background-color .15s ease, color .15s ease;
+  transition: background-color .15s ease, color .15s ease;
   overflow: hidden;
   white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
@@ -706,12 +706,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
   .view-switch-top button svg { width: 20px; height: 20px; }
   .brand-logo { height: 54px; }
   .view-switch-vertical button { width: 36px; height: 36px; }
-  .view-switch-vertical button[aria-current="page"] { width: 72px; }
+  .view-switch-vertical button[aria-current="page"] { width: 36px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .view-switch-top button,
-  .view-switch-vertical button,
-  .task-item,
-  .fab { transition: none; }
-}
