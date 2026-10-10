@@ -48,7 +48,7 @@ const MEDICAL_FIELDS = `
 `;
 
 export function openTaskForm(task = null, onSaved) {
-  const isEdit = !!task;
+  const isEdit = !!(task && task.id);
   const today = iso(new Date());
   const t = task || {
     title: "", notes: "", date: today, time: "", endTime: "",
