@@ -6,7 +6,9 @@ import {
   isConnected,
   disconnect,
   getStoredEmail,
-  fetchUserEmail
+  fetchUserEmail,
+  importAllEvents,
+  gcalEventToTask
 } from "../google.js";
 
 export async function renderSettings(root) {
@@ -35,10 +37,14 @@ export async function renderSettings(root) {
 
         <div class="gcal-actions">
           ${connected
-            ? `<button class="btn-ghost" id="btnDisconnect">Desconectar</button>`
+            ? `
+              <button class="btn-primary" id="btnImportGCAL">Importar desde Google Calendar</button>
+              <button class="btn-ghost" id="btnDisconnect">Desconectar</button>
+            `
             : `<button class="btn-primary" id="btnConnect">Conectar con Google</button>`}
         </div>
 
+        <p class="hint small" id="gcalMsg"></p>
         ${lastSync ? `<p class="hint small">Última sincronización: ${escapeHtml(lastSync)}</p>` : ""}
       </section>
 
@@ -66,16 +72,14 @@ export async function renderSettings(root) {
     </div>
   `;
 
+  const msg = root.querySelector("#gcalMsg");
+
   /* Conectar */
   root.querySelector("#btnConnect")?.addEventListener("click", async () => {
     try {
       await initGoogle();
       await requestToken();
-      try {
-        await fetchUserEmail();
-      } catch (e) {
-        console.warn("No se pudo obtener el email:", e);
-      }
+      try { await fetchUserEmail(); } catch (e) {}
       renderSettings(root);
     } catch (e) {
       alert("Error al conectar:\n\n" + (e.message || e));
@@ -87,6 +91,44 @@ export async function renderSettings(root) {
     if (!confirm("¿Desconectar de Google Calendar?")) return;
     disconnect();
     renderSettings(root);
+  });
+
+  /* Importar desde Google Calendar */
+  root.querySelector("#btnImportGCAL")?.addEventListener("click", async () => {
+    if (!confirm(
+      "Se van a importar TODOS los eventos de tu calendario de Google desde 2025 hasta hoy.\n\n" +
+      "Los eventos se convertirán en tareas de Papelegruba y se guardarán en este dispositivo.\n\n" +
+      "Si ya has importado antes, se crearán duplicados.\n\n" +
+      "¿Continuar?"
+    )) return;
+
+    msg.textContent = "Descargando eventos de Google…";
+    try {
+      const events = await importAllEvents({
+        from: "2025-01-01T00:00:00Z",
+        onProgress: (n, page) => {
+          msg.textContent = `Descargados ${n} eventos (página ${page})…`;
+        }
+      });
+
+      msg.textContent = `Descargados ${events.length}. Guardando en Papelegruba…`;
+
+      const { addTask } = await import("../db.js");
+      let count = 0;
+      for (const ev of events) {
+        const t = gcalEventToTask(ev);
+        if (!t.date) continue;
+        await addTask(t);
+        count++;
+      }
+
+      await setSetting("lastSync", new Date().toLocaleString("es-ES"));
+      msg.textContent = `✅ Importados ${count} eventos. Ábrelos en Día, Semana o Mes.`;
+
+      setTimeout(() => renderSettings(root), 1500);
+    } catch (e) {
+      msg.textContent = "❌ Error: " + (e.message || e);
+    }
   });
 
   /* Guardar Client ID */
@@ -112,7 +154,7 @@ export async function renderSettings(root) {
     URL.revokeObjectURL(url);
   };
 
-  /* Importar */
+  /* Importar JSON */
   root.querySelector("#btnImport").onclick = () => {
     const inp = document.createElement("input");
     inp.type = "file";
