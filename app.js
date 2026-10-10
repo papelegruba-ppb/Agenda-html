@@ -1,35 +1,42 @@
-// app.js de diagnóstico
-const root = document.getElementById("view-root");
-root.innerHTML = `<pre id="log" style="padding:1rem;font-family:monospace;font-size:14px;white-space:pre-wrap;"></pre>`;
-const log = document.getElementById("log");
+import { initDB } from "./js/db.js";
+import { renderYear } from "./js/views/year.js";
+import { renderMonth } from "./js/views/month.js";
+import { renderWeek } from "./js/views/week.js";
+import { renderDay, setDayCursor } from "./js/views/day.js";
+import { renderChecklist } from "./js/views/checklist.js";
+import { renderTimer } from "./js/views/timer.js";
+import { renderProjects } from "./js/views/projects.js";
+import { renderHabits } from "./js/views/habits.js";
+import { renderSettings } from "./js/views/settings.js";
+import { renderMedical } from "./js/views/medical.js";
 
-async function testImport(name, path) {
-  try {
-    await import(path);
-    log.textContent += `✅ ${name}\n`;
-  } catch (e) {
-    log.textContent += `❌ ${name} → ${e.message}\n`;
-    throw e;
-  }
+const views = {
+  year: renderYear, month: renderMonth, week: renderWeek, day: renderDay,
+  checklist: renderChecklist, timer: renderTimer,
+  projects: renderProjects, habits: renderHabits, settings: renderSettings,
+  medical: renderMedical
+};
+
+const root = document.getElementById("view-root");
+const buttons = document.querySelectorAll(".view-switch button");
+
+async function navigate(view) {
+  buttons.forEach(b => b.toggleAttribute("aria-current", b.dataset.view === view));
+  root.innerHTML = "";
+  await views[view](root);
 }
 
+buttons.forEach(b => b.addEventListener("click", () => navigate(b.dataset.view)));
+
+document.addEventListener("navigate-day", e => {
+  setDayCursor(e.detail.date);
+  navigate("day");
+});
+
 (async () => {
-  try {
-    await testImport("db.js", "./js/db.js");
-    await testImport("dates.js", "./js/dates.js");
-    await testImport("categories.js", "./js/categories.js");
-    await testImport("views/year.js", "./js/views/year.js");
-    await testImport("views/month.js", "./js/views/month.js");
-    await testImport("views/week.js", "./js/views/week.js");
-    await testImport("views/day.js", "./js/views/day.js");
-    await testImport("views/checklist.js", "./js/views/checklist.js");
-    await testImport("views/timer.js", "./js/views/timer.js");
-    await testImport("views/projects.js", "./js/views/projects.js");
-    await testImport("views/habits.js", "./js/views/habits.js");
-    await testImport("views/settings.js", "./js/views/settings.js");
-    await testImport("views/medical.js", "./js/views/medical.js");
-    log.textContent += "\n✅ Todos los imports funcionan.";
-  } catch (e) {
-    log.textContent += "\n❌ El que falla es el último marcado arriba.";
+  await initDB();
+  navigate("day");
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js");
   }
 })();
