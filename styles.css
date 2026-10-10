@@ -214,16 +214,16 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 }
 
 .view-switch-vertical button[aria-current="page"] {
-  width: 82px;
+  width: 40px;
   background: var(--c-lavender-dk);
   color: #FFFFFF;
-  padding: 0 .7rem 0 1rem;
+  padding: 0;
 }
 
 .view-switch-vertical button[aria-current="page"]::before {
-  content: "✓  " attr(data-long);
+  content: attr(data-short);
   color: #FFFFFF;
-  font-size: .74rem;
+  font-size: .78rem;
   font-weight: 700;
 }
 
