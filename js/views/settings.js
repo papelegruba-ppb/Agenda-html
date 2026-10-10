@@ -1,6 +1,13 @@
 import { getAllTasks, getSetting, setSetting } from "../db.js";
 import { GOOGLE_CLIENT_ID } from "../config.js";
-import { initGoogle, requestToken, isConnected, disconnect, getStoredEmail } from "../google.js";
+import {
+  initGoogle,
+  requestToken,
+  isConnected,
+  disconnect,
+  getStoredEmail,
+  fetchUserEmail
+} from "../google.js";
 
 export async function renderSettings(root) {
   const clientId = (await getSetting("googleClientId")) || GOOGLE_CLIENT_ID;
@@ -28,9 +35,7 @@ export async function renderSettings(root) {
 
         <div class="gcal-actions">
           ${connected
-            ? `
-              <button class="btn-ghost" id="btnDisconnect">Desconectar</button>
-            `
+            ? `<button class="btn-ghost" id="btnDisconnect">Desconectar</button>`
             : `<button class="btn-primary" id="btnConnect">Conectar con Google</button>`}
         </div>
 
@@ -66,6 +71,11 @@ export async function renderSettings(root) {
     try {
       await initGoogle();
       await requestToken();
+      try {
+        await fetchUserEmail();
+      } catch (e) {
+        console.warn("No se pudo obtener el email:", e);
+      }
       renderSettings(root);
     } catch (e) {
       alert("Error al conectar:\n\n" + (e.message || e));
