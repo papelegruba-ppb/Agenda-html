@@ -40,25 +40,21 @@ export async function initGoogle() {
 
 /* ---------- Pedir token (popup) ---------- */
 export async function requestToken() {
+  // Si ya tenemos token vivo, lo devolvemos
   if (accessToken && Date.now() < tokenExpiresAt - 60000) {
     return accessToken;
   }
   if (!tokenClient) await initGoogle();
 
   return new Promise((resolve, reject) => {
-    tokenClient.callback = async (resp) => {
+    tokenClient.callback = (resp) => {
       if (resp.error) {
         reject(new Error(resp.error));
         return;
       }
       accessToken = resp.access_token;
       tokenExpiresAt = Date.now() + (resp.expires_in || 3600) * 1000;
-      await setSetting("googleConnected", true);
-      try {
-        const info = await api("/users/me/calendarList?maxResults=1");
-        currentEmail = info.items?.[0]?.id || null;
-        if (currentEmail) await setSetting("googleEmail", currentEmail);
-      } catch (_) {}
+      setSetting("googleConnected", true);
       resolve(accessToken);
     };
     tokenClient.requestAccessToken({
@@ -86,13 +82,15 @@ export function disconnect() {
   setSetting("googleEmail", null);
 }
 
-/* ---------- Fetch con token ---------- */
+/* ---------- Fetch con token (NO recursivo) ---------- */
 async function api(path, init = {}) {
-  const token = await requestToken();
+  if (!accessToken || Date.now() >= tokenExpiresAt - 60000) {
+    throw new Error("Token no disponible. Conecta con Google primero.");
+  }
   const res = await fetch(`${CAL_API}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
       ...(init.headers || {})
     }
@@ -102,6 +100,14 @@ async function api(path, init = {}) {
     throw new Error(`Google API ${res.status}: ${txt}`);
   }
   return res.status === 204 ? null : res.json();
+}
+
+/* ---------- Obtener email del usuario conectado ---------- */
+export async function fetchUserEmail() {
+  const info = await api("/users/me/calendarList?maxResults=1");
+  currentEmail = info.items?.[0]?.id || null;
+  if (currentEmail) await setSetting("googleEmail", currentEmail);
+  return currentEmail;
 }
 
 /* ---------- Listar eventos ---------- */
