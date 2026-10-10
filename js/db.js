@@ -156,3 +156,11 @@ export async function getAllProjects() {
     req.onerror = () => reject(req.error);
   });
 }
+export async function getAllProjects() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("projects").objectStore("projects").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
