@@ -587,3 +587,13 @@ html, body {
   display: flex; flex-direction: column;
 }
 .wi.type-work-sye     { border-left-color: var
+                       .btn-maps {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  padding: .55rem .7rem;
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.btn-maps:active { background: var(--c-lavender-2); }
