@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#C9A7E8">
+<title>Papelegruba</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@300..700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --c-ink:#3F3F46; --c-ink-soft:#6B6B73;
+  --c-lavender:#C9A7E8; --c-lavender-2:#E4D3F4;
+  --c-butter:#F4E87A; --c-butter-2:#FAF3C0;
+  --c-bg:#FFFFFF; --c-surface:#FAF8FC; --c-border:#E8E4EE;
+  --c-work-sye:#8E7CC3; --c-work-sye-2:#E4DDF2;
+  --c-work-jac:#DC2127; --c-work-jac-2:#F8D3D4;
+  --c-app:#F4E87A; --c-app-2:#FBF3C8;
+  --c-extra-family:#5484ED; --c-extra-family-2:#D6E0FA;
+  --c-extra-client:#FF887C; --c-extra-client-2:#FFD9D3;
+  --c-medical:#46D6DB; --c-medical-2:#C7EEF0;
+  --c-vacation:#7BDCB5; --c-vacation-2:#D6F3E6;
+  --c-personal:#C9A7E8; --c-personal-2:#E4D3F4;
+  --c-event:#6B6B73; --c-event-2:#E4E4E8;
+  --c-done:#C7E8C0;
+  --font-display:"Fraunces",Georgia,serif;
+  --font-ui:"Inter",system-ui,-apple-system,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--c-bg);color:var(--c-ink);font-family:var(--font-ui);font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font-family:inherit}
+
+.app-header{position:sticky;top:0;z-index:10;padding:env(safe-area-inset-top) 1rem .5rem;background:var(--c-bg);border-bottom:1px solid var(--c-border)}
+.brand{position:relative;display:flex;align-items:center;justify-content:center;height:64px;overflow:hidden}
+.brand-splash{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+.splash-lavender{fill:var(--c-lavender);opacity:.55}
+.splash-butter{fill:var(--c-butter);opacity:.75}
+.brand-name{position:relative;z-index:1;margin:0;font-family:var(--font-display);font-weight:500;font-size:2rem;letter-spacing:-.01em;color:var(--c-ink)}
+.view-switch{display:flex;gap:.25rem;overflow-x:auto;padding-bottom:.25rem;scrollbar-width:none}
+.view-switch::-webkit-scrollbar{display:none}
+.view-switch button{flex:0 0 auto;padding:.4rem .8rem;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-ink-soft);border-radius:999px;font-size:.85rem;cursor:pointer}
+.view-switch button[aria-current="page"]{background:var(--c-lavender-2);border-color:var(--c-lavender);color:var(--c-ink)}
+
+#view-root{padding:1rem;max-width:720px;margin:0 auto;padding-bottom:6rem}
+.view-title{font-family:var(--font-display);font-weight:500;font-size:1.5rem;margin:0 0 .75rem}
+.empty{color:var(--c-ink-soft);font-style:italic;text-align:center;padding:1.5rem 0}
+
+/* Mariposas */
+.butterfly{display:inline-block;width:14px;height:14px;vertical-align:middle}
+.butterfly .wing{fill:currentColor;opacity:.85}
+.butterfly.type-work-sye{color:var(--c-work-sye)}
+.butterfly.type-work-jac{color:var(--c-work-jac)}
+.butterfly.type-app{color:var(--c-app)}
+.butterfly.type-extra-family{color:var(--c-extra-family)}
+.butterfly.type-extra-client{color:var(--c-extra-client)}
+.butterfly.type-medical{color:var(--c-medical)}
+.butterfly.type-vacation{color:var(--c-vacation)}
+.butterfly.type-personal{color:var(--c-personal)}
+.butterfly.type-event{color:var(--c-event)}
+
+/* Vista Día */
+.day-view{display:flex;flex-direction:column;gap:1rem}
+.day-head{display:grid;grid-template-columns:40px 1fr 40px;align-items:center;gap:.5rem}
+.day-titles{text-align:center}
+.day-name{font-family:var(--font-display);font-weight:500;font-size:1.4rem;margin:0;text-transform:capitalize}
+.day-date{font-size:.85rem;color:var(--c-ink-soft);text-transform:capitalize}
+.nav-prev,.nav-next{width:36px;height:36px;border-radius:50%;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-ink);font-size:1.2rem;line-height:1;cursor:pointer;padding:0}
+.day-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.4rem}
+.task-item{display:grid;grid-template-columns:32px 1fr auto auto;align-items:center;gap:.5rem;background:var(--c-bg);border:1px solid var(--c-border);border-left:4px solid var(--c-personal);border-radius:10px;padding:.6rem .75rem;cursor:pointer}
+.task-item.type-work-sye{border-left-color:var(--c-work-sye)}
+.task-item.type-work-jac{border-left-color:var(--c-work-jac)}
+.task-item.type-app{border-left-color:var(--c-app)}
+.task-item.type-extra-family{border-left-color:var(--c-extra-family)}
+.task-item.type-extra-client{border-left-color:var(--c-extra-client)}
+.task-item.type-medical{border-left-color:var(--c-medical)}
+.task-item.type-vacation{border-left-color:var(--c-vacation)}
+.task-item.type-personal{border-left-color:var(--c-personal)}
+.task-item.type-event{border-left-color:var(--c-event)}
+.task-item.done{opacity:.55}
+.task-item.done .task-title{text-decoration:line-through}
+.task-check{width:24px;height:24px;border-radius:50%;border:2px solid var(--c-border);background:transparent;cursor:pointer;padding:0}
+.task-item.done .task-check{background:var(--c-done);border-color:var(--c-done)}
+.task-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.task-line{display:flex;align-items:baseline;gap:.4rem}
+.task-line time{font-variant-numeric:tabular-nums;font-size:.8rem;color:var(--c-ink-soft);flex:0 0 auto}
+.task-title{font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.task-sub,.task-notes{color:var(--c-ink-soft);font-size:.78rem}
+.task-delete{background:transparent;border:0;color:var(--c-ink-soft);cursor:pointer;font-size:.8rem;padding:.25rem;opacity:.5}
+.fab{position:fixed;bottom:calc(1.25rem + env(safe-area-inset-bottom));right:1.25rem;width:56px;height:56px;border-radius:50%;background:var(--c-lavender);color:var(--c-ink);border:0;font-size:1.6rem;line-height:1;cursor:pointer;box-shadow:0 6px 20px rgba(201,167,232,.5);z-index:20}
+
+/* Vista Mes */
+.month-view{display:flex;flex-direction:column;gap:.75rem}
+.month-head{display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.month-title{font-family:var(--font-display);font-weight:500;font-size:1.5rem;margin:0;text-transform:capitalize}
+.month-weekdays{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;font-size:.75rem;color:var(--c-ink-soft);letter-spacing:.05em;text-transform:uppercase}
+.month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;background:var(--c-border);border:1px solid var(--c-border);border-radius:12px;overflow:hidden}
+.day-cell{background:var(--c-bg);border:0;padding:.4rem .3rem .35rem;min-height:64px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;font:inherit;color:inherit;cursor:pointer;text-align:left}
+.day-cell.out{color:var(--c-ink-soft);opacity:.45}
+.day-cell.today{background:var(--c-lavender-2)}
+.day-num{font-family:var(--font-display);font-size:1rem;line-height:1.1}
+.day-dots{display:flex;gap:2px;flex-wrap:wrap}
+.day-dots .butterfly{width:11px;height:11px}
+.day-count{font-size:.65rem;color:var(--c-ink-soft);margin-top:auto}
+
+/* Modales */
+.modal-overlay{position:fixed;inset:0;background:rgba(63,63,70,.35);display:flex;align-items:flex-end;justify-content:center;z-index:100;opacity:0;transition:opacity .18s ease;padding:env(safe-area-inset-top) 0 0}
+.modal-overlay.open{opacity:1}
+.modal-sheet{background:var(--c-bg);width:100%;max-width:640px;max-height:92vh;border-radius:18px 18px 0 0;display:flex;flex-direction:column;transform:translateY(20px);transition:transform .18s ease;box-shadow:0 -8px 30px rgba(0,0,0,.15)}
+.modal-overlay.open .modal-sheet{transform:translateY(0)}
+.modal-head{display:grid;grid-template-columns:40px 1fr 40px;align-items:center;padding:.5rem .75rem;border-bottom:1px solid var(--c-border)}
+.modal-title{font-family:var(--font-display);font-weight:500;font-size:1.1rem;margin:0;text-align:center}
+.modal-close{background:none;border:0;font-size:1.1rem;color:var(--c-ink);cursor:pointer;width:40px;height:40px;border-radius:50%}
+.modal-body{padding:.75rem 1rem;overflow-y:auto;flex:1}
+.modal-foot{display:flex;justify-content:flex-end;gap:.5rem;padding:.75rem 1rem calc(.75rem + env(safe-area-inset-bottom));border-top:1px solid var(--c-border)}
+.btn-primary{background:var(--c-lavender);color:var(--c-ink);border:0;border-radius:999px;padding:.55rem 1.1rem;font-weight:500;cursor:pointer}
+.btn-ghost{background:transparent;color:var(--c-ink-soft);border:1px solid var(--c-border);border-radius:999px;padding:.55rem 1rem;cursor:pointer}
+
+/* Formularios */
+.task-form label,.project-form label{display:block;margin-bottom:.6rem;font-size:.85rem;color:var(--c-ink-soft)}
+.task-form input,.task-form textarea,.task-form select,.project-form input{width:100%;margin-top:.25rem;padding:.55rem .7rem;border:1px solid var(--c-border);border-radius:10px;font:inherit;color:var(--c-ink);background:var(--c-bg)}
+.task-form input:focus,.task-form textarea:focus,.task-form select:focus{outline:2px solid var(--c-lavender)}
+.fld-row{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.fld-block{margin:.5rem 0 .75rem}
+.fld-label{display:block;font-size:.85rem;color:var(--c-ink-soft);margin-bottom:.35rem}
+.fld-title input{font-size:1.05rem}
+.cat-picker{display:flex;flex-wrap:wrap;gap:.4rem}
+.cat-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .7rem;border:1px solid var(--c-border);background:var(--c-bg);border-radius:999px;font-size:.85rem;color:var(--c-ink);cursor:pointer}
+.cat-chip .cat-dot{width:12px;height:12px;border-radius:50%;border:1px solid rgba(0,0,0,.08);flex:0 0 auto}
+.cat-chip[aria-checked="true"][data-cat="work-sye"]{background:var(--c-work-sye-2);border-color:var(--c-work-sye)}
+.cat-chip[aria-checked="true"][data-cat="work-jac"]{background:var(--c-work-jac-2);border-color:var(--c-work-jac)}
+.cat-chip[aria-checked="true"][data-cat="app"]{background:var(--c-app-2);border-color:var(--c-app)}
+.cat-chip[aria-checked="true"][data-cat="extra-family"]{background:var(--c-extra-family-2);border-color:var(--c-extra-family)}
+.cat-chip[aria-checked="true"][data-cat="extra-client"]{background:var(--c-extra-client-2);border-color:var(--c-extra-client)}
+.cat-chip[aria-checked="true"][data-cat="medical"]{background:var(--c-medical-2);border-color:var(--c-medical)}
+.cat-chip[aria-checked="true"][data-cat="vacation"]{background:var(--c-vacation-2);border-color:var(--c-vacation)}
+.cat-chip[aria-checked="true"][data-cat="personal"]{background:var(--c-personal-2);border-color:var(--c-personal)}
+.cat-chip[aria-checked="true"][data-cat="event"]{background:var(--c-event-2);border-color:var(--c-event)}
+.med-only{display:none}
+.med-only.show{display:block}
+
+/* Vista Semana */
+.week-view{display:flex;flex-direction:column;gap:.75rem}
+.week-head{display:flex;align-items:center;justify-content:space-between}
+.week-title{font-family:var(--font-display);font-weight:500;font-size:1.15rem;margin:0}
+.week-columns{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(140px,1fr);gap:.5rem;overflow-x:auto;padding-bottom:.5rem}
+.week-col{background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:.5rem;min-height:180px}
+.week-col.today{background:var(--c-lavender-2);border-color:var(--c-lavender)}
+.week-col header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.35rem}
+.wd{text-transform:capitalize;font-size:.75rem;color:var(--c-ink-soft)}
+.dn{font-family:var(--font-display);font-size:1.1rem}
+.week-items{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.25rem}
+.wi{background:var(--c-bg);border-left:3px solid var(--c-personal);border-radius:6px;padding:.3rem .4rem;font-size:.8rem;display:flex;flex-direction:column}
+.wi.type-work-sye{border-left-color:var(--c-work-sye)}
+.wi.type-work-jac{border-left-color:var(--c-work-jac)}
+.wi.type-medical{border-left-color:var(--c-medical)}
+.wi.type-vacation{border-left-color:var(--c-vacation)}
+.wi.done{opacity:.55;text-decoration:line-through}
+.wi time{font-variant-numeric:tabular-nums;color:var(--c-ink-soft);font-size:.7rem}
+.wi-title{font-weight:500}
+
+/* Vista Médico */
+.medical-view{display:flex;flex-direction:column;gap:.75rem}
+.medical-head{display:flex;justify-content:space-between;align-items:center;gap:.5rem}
+.section-title{font-family:var(--font-display);font-weight:500;font-size:1.05rem;margin:1rem 0 .35rem;color:var(--c-ink-soft)}
+.medical-list{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:.4rem}
+.medical-item{display:grid;grid-template-columns:100px 1fr;gap:.75rem;background:var(--c-bg);border:1px solid var(--c-border);border-left:4px solid var(--c-medical);border-radius:10px;padding:.6rem .75rem;cursor:pointer}
+.medical-list.past .medical-item{opacity:.7;border-left-color:var(--c-ink-soft)}
+.mi-date{display:flex;flex-direction:column;font-size:.82rem}
+.mi-date strong{font-family:var(--font-display);font-weight:500}
+.mi-date span{color:var(--c-ink-soft)}
+.mi-body{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mi-title{font-weight:500}
+.mi-body small{color:var(--c-ink-soft);font-size:.75rem}
+
+/* Ajustes */
+.settings-view{display:flex;flex-direction:column;gap:1rem}
+.settings-block{background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:.85rem 1rem}
+.settings-block h3{font-family:var(--font-display);font-weight:500;font-size:1.1rem;margin:0 0 .5rem}
+.settings-block .hint{color:var(--c-ink-soft);font-size:.85rem;margin:.25rem 0 .75rem;line-height:1.4}
+.gcal-status{margin:.75rem 0 .5rem;padding:.5rem .75rem;border-radius:8px;font-size:.85rem;background:var(--c-butter-2)}
+.gcal-status.ok{background:var(--c-done)}
+.gcal-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <svg class="brand-splash" viewBox="0 0 200 80" aria-hidden="true">
+      <path class="splash-lavender" d="M10,50 C40,10 90,5 130,30 C160,50 180,55 195,45 C180,70 120,80 70,68 C30,58 15,55 10,50 Z"/>
+      <path class="splash-butter" d="M30,60 C60,35 110,30 150,50 C170,60 185,62 195,58 C175,75 120,80 70,72 C45,68 32,65 30,60 Z"/>
+    </svg>
+    <h1 class="brand-name">Papelegruba</h1>
+  </div>
+  <nav class="view-switch" aria-label="Vistas">
+    <button data-view="day">Día</button>
+    <button data-view="week">Semana</button>
+    <button data-view="month">Mes</button>
+    <button data-view="medical">Citas</button>
+    <button data-view="settings">Ajustes</button>
+  </nav>
+</header>
+
+<main id="view-root" aria-live="polite"></main>
+
+<script type="module">
+/* ============================================================
+   Papelegruba · todo-en-uno
+   ============================================================ */
+
+/* ---------- IndexedDB ---------- */
+const DB_NAME = "papelegruba";
+const DB_VERSION = 1;
+let dbPromise;
+
+function initDB(){
+  if(dbPromise) return dbPromise;
+  dbPromise = new Promise((res,rej)=>{
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e=>{
+      const db = e.target.result;
+      const mk = (name, opts={keyPath:"id"})=>{
+        if(!db.objectStoreNames.contains(name)){
+          const s = db.createObjectStore(name, opts);
+          if(name==="tasks"){
+            s.createIndex("by_date","date");
+            s.createIndex("by_type","type");
+            s.createIndex("by_date_type",["date","type"]);
+          }
+        }
+      };
+      mk("tasks"); mk("projects"); mk("notes"); mk("habits");
+      mk("sessions"); mk("settings",{keyPath:"key"});
+    };
+    req.onsuccess=()=>res(req.result);
+    req.onerror=()=>rej(req.error);
+  });
+  return dbPromise;
+}
+
+async function tx(store, mode, fn){
+  const db = await initDB();
+  return new Promise((res,rej)=>{
+    const t = db.transaction(store, mode);
+    const s = t.objectStore(store);
+    const out = fn(s);
+    t.oncomplete = ()=>res(out?.result ?? out);
+    t.onerror = ()=>rej(t.error);
+  });
+}
+
+const uid = ()=>crypto.randomUUID();
+const nowIso = ()=>new Date().toISOString();
+
+async function addTask(partial){
+  const now = nowIso();
+  const task = {
+    id: uid(), type:"personal", title:"", notes:"",
+    date:null, time:null, endTime:null, duration:25,
+    projectId:null, tags:[], priority:0,
+    done:false, doneAt:null, createdAt:now, updatedAt:now,
+    gcalEventId:null,
+    ...partial
+  };
+  await tx("tasks","readwrite",s=>s.put(task));
+  return task;
+}
+
+async function updateTask(id, patch){
+  const db = await initDB();
+  return new Promise((res,rej)=>{
+    const t = db.transaction("tasks","readwrite");
+    const s = t.objectStore("tasks");
+    const req = s.get(id);
+    req.onsuccess = ()=>{
+      const merged = {...req.result, ...patch, updatedAt: nowIso()};
+      s.put(merged);
+      t.oncomplete = ()=>res(merged);
+    };
+    req.onerror = ()=>rej(req.error);
+  });
+}
+
+async function deleteTask(id){
+  return tx("tasks","readwrite",s=>s.delete(id));
+}
+
+async function getAllTasks(){
+  const db = await initDB();
+  return new Promise((res,rej)=>{
+    const r = db.transaction("tasks").objectStore("tasks").getAll();
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = ()=>rej(r.error);
+  });
+}
+
+async function getTasksByDate(dateStr){
+  const db = await initDB();
+  return new Promise((res,rej)=>{
+    const idx = db.transaction("tasks").objectStore("tasks").index("by_date");
+    const r = idx.getAll(IDBKeyRange.only(dateStr));
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = ()=>rej(r.error);
+  });
+}
+
+async function getTasksInRange(fromStr,toStr){
+  const db = await initDB();
+  return new Promise((res,rej)=>{
+    const idx = db.transaction("tasks").objectStore("tasks").index("by_date");
+    const r = idx.getAll(IDBKeyRange.bound(fromStr,toStr));
+    r.onsuccess = ()=>res(r.result);
+    r.onerror = ()=>rej(r.error);
+  });
+}
+
+async function getSetting(key){
+  const db = await initDB();
+  return new Promise((res,rej)=>{
+    const r = db.transaction("settings").objectStore("settings").get(key);
+    r.onsuccess = ()=>res(r.result?.value ?? null);
+    r.onerror = ()=>rej(r.error);
+  });
+}
+
+async function setSetting(key, value){
+  await tx("settings","readwrite",s=>s.put({key,value}));
+}
+
+/* ---------- Utilidades de fecha ---------- */
+const iso = d=>{
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,"0");
+  const dd=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${dd}`;
+};
+function startOfWeek(date){
+  const d=new Date(date);
+  const day=(d.getDay()+6)%7;
+  d.setDate(d.getDate()-day);
+  d.setHours(0,0,0,0);
+  return d;
+}
+function startOfMonth(date){return new Date(date.getFullYear(),date.getMonth(),1);}
+function addDays(date,n){const d=new Date(date);d.setDate(d.getDate()+n);return d;}
+function addMonths(date,n){return new Date(date.getFullYear(),date.getMonth()+n,1);}
+function isSameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();}
+function monthMatrix(year,month){
+  const first=new Date(year,month,1);
+  const start=startOfWeek(first);
+  const weeks=[];
+  for(let w=0;w<6;w++){
+    const row=[];
+    for(let d=0;d<7;d++) row.push(addDays(start,w*7+d));
+    weeks.push(row);
+  }
+  return weeks;
+}
+
+/* ---------- Categorías ---------- */
+const CATEGORIES = [
+  {id:"work-sye",     label:"SYE",              color:"#8E7CC3", colorId:"3"},
+  {id:"work-jac",     label:"JAC",              color:"#DC2127", colorId:"11"},
+  {id:"app",          label:"Apps propias",     color:"#F4E87A", colorId:"5"},
+  {id:"extra-family", label:"Extras · familia", color:"#5484ED", colorId:"9"},
+  {id:"extra-client", label:"Extras · clientes",color:"#FF887C", colorId:"4"},
+  {id:"medical",      label:"Médico",           color:"#46D6DB", colorId:"7"},
+  {id:"vacation",     label:"Vacaciones",       color:"#7BDCB5", colorId:"2"},
+  {id:"personal",     label:"Personal",         color:"#C9A7E8", colorId:"1"},
+  {id:"event",        label:"Evento",           color:"#6B6B73", colorId:"8"}
+];
+const DEFAULT_CATEGORY = "personal";
+const getCategory = id => CATEGORIES.find(c=>c.id===id) || CATEGORIES.find(c=>c.id===DEFAULT_CATEGORY);
+
+/* ---------- Mariposa SVG ---------- */
+const butterflySvg = ()=>`
+  <svg viewBox="0 0 24 24" width="100%" height="100%">
+    <path class="wing" d="M12 4 C10 8 6 8 4 10 C2 12 2 16 5 17 C8 18 11 15 12 12 C13 15 16 18 19 17 C22 16 22 12 20 10 C18 8 14 8 12 4 Z"/>
+  </svg>`;
+
+/* ---------- Modal ---------- */
+function openModal({title, body, actions=[], onClose}){
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.innerHTML = `
+    <div class="modal-sheet" role="dialog" aria-modal="true">
+      <header class="modal-head">
+        <button class="modal-close" aria-label="Cerrar">✕</button>
+        <h2 class="modal-title">${title}</h2>
+        <div></div>
+      </header>
+      <div class="modal-body"></div>
+      <footer class="modal-foot"></footer>
+    </div>`;
+  const bodyEl = overlay.querySelector(".modal-body");
+  const footEl = overlay.querySelector(".modal-foot");
+  if(typeof body==="string") bodyEl.innerHTML = body;
+  else if(body instanceof Node) bodyEl.appendChild(body);
+
+  const close = ()=>{
+    overlay.classList.remove("open");
+    setTimeout(()=>{overlay.remove(); onClose?.();},180);
+  };
+  overlay.querySelector(".modal-close").onclick = close;
+  overlay.addEventListener("click",e=>{if(e.target===overlay)close();});
+  for(const a of actions){
+    const btn = document.createElement("button");
+    btn.className = a.primary ? "btn-primary" : "btn-ghost";
+    btn.textContent = a.label;
+    btn.onclick = ()=>a.onClick?.({close, bodyEl});
+    footEl.appendChild(btn);
+  }
+  document.body.appendChild(overlay);
+  requestAnimationFrame(()=>overlay.classList.add("open"));
+  return {close, bodyEl, footEl};
+}
+
+/* ---------- Formulario de tarea ---------- */
+function renderCategoryPicker(selected){
+  return `
+    <div class="cat-picker" role="radiogroup">
+      ${CATEGORIES.map(c=>`
+        <button type="button" class="cat-chip" role="radio"
+                aria-checked="${c.id===selected}"
+                data-cat="${c.id}">
+          <span class="cat-dot" style="background:${c.color}"></span>
+          <span>${c.label}</span>
+        </button>`).join("")}
+    </div>`;
+}
+
+function openTaskForm(task=null, onSaved){
+  const isEdit = !!task;
+  const today = iso(new Date());
+  const t = task || {
+    title:"", notes:"", date:today, time:"", endTime:"",
+    type:"personal", priority:0, duration:25
+  };
+
+  const body = `
+    <form class="task-form" autocomplete="off">
+      <label class="fld-title">Título
+        <input name="title" required value="${escapeAttr(t.title)}" placeholder="¿Qué hay que hacer?">
+      </label>
+      <div class="fld-row">
+        <label>Fecha<input name="date" type="date" value="${t.date||today}"></label>
+        <label>Hora<input name="time" type="time" value="${t.time||""}"></label>
+      </div>
+      <div class="fld-row med-only ${t.type==="medical"?"show":""}">
+        <label>Hora fin<input name="endTime" type="time" value="${t.endTime||""}"></label>
+        <label>Duración (min)<input name="duration" type="number" min="5" step="5" value="${t.duration??25}"></label>
+      </div>
+      <div class="fld-block">
+        <span class="fld-label">Categoría</span>
+        ${renderCategoryPicker(t.type)}
+      </div>
+      <label>Notas
+        <textarea name="notes" rows="3" placeholder="Detalles, enlaces...">${escapeHtml(t.notes||"")}</textarea>
+      </label>
+      <div class="med-only ${t.type==="medical"?"show":""}">
+        <label>Especialidad<input name="specialty" list="specs" value="${escapeAttr(t.specialty||"")}"></label>
+        <datalist id="specs">
+          <option>Medicina general</option><option>Traumatología</option>
+          <option>Dentista</option><option>Oftalmología</option>
+          <option>Dermatología</option><option>Ginecología</option>
+          <option>Análisis</option><option>Radiología</option>
+        </datalist>
+        <label>Doctor/a<input name="doctor" value="${escapeAttr(t.doctor||"")}"></label>
+        <label>Centro<input name="center" value="${escapeAttr(t.center||"")}"></label>
+        <label>Dirección<input name="address" value="${escapeAttr(t.address||"")}"></label>
+        <label>Teléfono<input name="phone" type="tel" value="${escapeAttr(t.phone||"")}"></label>
+        <label>Recordatorio
+          <select name="reminderMinutes">
+            <option value="">Sin recordatorio</option>
+            <option value="15" ${t.reminderMinutes===15?"selected":""}>15 min antes</option>
+            <option value="60" ${t.reminderMinutes===60?"selected":""}>1 hora antes</option>
+            <option value="1440" ${t.reminderMinutes===1440?"selected":""}>1 día antes</option>
+          </select>
+        </label>
+      </div>
+    </form>`;
+
+  const {bodyEl, close} = openModal({
+    title: isEdit ? "Editar tarea" : "Nueva tarea",
+    body,
+    actions: [
+      {label:"Cancelar", onClick:({close})=>close()},
+      {label:"Guardar", primary:true, onClick: async ({close})=>{
+        const data = readTaskForm(bodyEl);
+        if(!data.title) return;
+        if(isEdit) await updateTask(task.id, data);
+        else await addTask(data);
+        close();
+        onSaved?.();
+      }}
+    ]
+  });
+
+  const chips = bodyEl.querySelectorAll(".cat-chip");
+  chips.forEach(chip=>{
+    chip.onclick = ()=>{
+      chips.forEach(c=>c.setAttribute("aria-checked","false"));
+      chip.setAttribute("aria-checked","true");
+      const isMed = chip.dataset.cat==="medical";
+      bodyEl.querySelectorAll(".med-only").forEach(el=>el.classList.toggle("show",isMed));
+    };
+  });
+  bodyEl.querySelector('[name="title"]')?.focus();
+}
+
+function readTaskForm(root){
+  const fd = new FormData(root.querySelector("form"));
+  const cat = root.querySelector('.cat-chip[aria-checked="true"]')?.dataset.cat || "personal";
+  const data = {
+    title: (fd.get("title")||"").toString().trim(),
+    notes: (fd.get("notes")||"").toString(),
+    date: fd.get("date")||null,
+    time: fd.get("time")||null,
+    endTime: fd.get("endTime")||null,
+    duration: Number(fd.get("duration"))||25,
+    type: cat,
+    priority: 0
+  };
+  if(cat==="medical"){
+    data.specialty = fd.get("specialty")||null;
+    data.doctor    = fd.get("doctor")||null;
+    data.center    = fd.get("center")||null;
+    data.address   = fd.get("address")||null;
+    data.phone     = fd.get("phone")||null;
+    const r = fd.get("reminderMinutes");
+    data.reminderMinutes = r ? Number(r) : null;
+  }
+  return data;
+}
+
+const escapeAttr = s => (s||"").replace(/"/g,"&quot;");
+const escapeHtml = s => (s||"").replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const cap = s => s.charAt(0).toUpperCase()+s.slice(1);
+
+/* ---------- Vista Día ---------- */
+let dayCursor = new Date();
+
+async function renderDay(root){
+  const dateStr = iso(dayCursor);
+  const tasks = await getTasksByDate(dateStr);
+  tasks.sort((a,b)=>{
+    if(!a.time && b.time) return 1;
+    if(a.time && !b.time) return -1;
+    return (a.time||"").localeCompare(b.time||"");
+  });
+
+  const isToday = isSameDay(dayCursor,new Date());
+  const dayName = dayCursor.toLocaleDateString("es-ES",{weekday:"long"});
+  const monthName = dayCursor.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
+
+  root.innerHTML = `
+    <div class="day-view">
+      <div class="day-head">
+        <button class="nav-prev" aria-label="Anterior">‹</button>
+        <div class="day-titles">
+          <h2 class="day-name">${cap(dayName)}${isToday?" · Hoy":""}</h2>
+          <span class="day-date">${dayCursor.getDate()} de ${monthName}</span>
+        </div>
+        <button class="nav-next" aria-label="Siguiente">›</button>
+      </div>
+      <ul class="day-list">
+        ${tasks.length ? tasks.map(renderTaskItem).join("") : `<li class="empty">Sin tareas para este día</li>`}
+      </ul>
+      <button class="fab" aria-label="Nueva tarea">+</button>
+    </div>`;
+
+  root.querySelector(".nav-prev").onclick = ()=>{dayCursor=addDays(dayCursor,-1);renderDay(root);};
+  root.querySelector(".nav-next").onclick = ()=>{dayCursor=addDays(dayCursor,1);renderDay(root);};
+  root.querySelector(".fab").onclick = ()=>openTaskForm({date:dateStr},()=>renderDay(root));
+
+  root.querySelectorAll(".task-item").forEach(li=>{
+    const id = li.dataset.taskId;
+    li.querySelector(".task-check").onclick = async e=>{
+      e.stopPropagation();
+      const done = li.classList.toggle("done");
+      await updateTask(id,{done, doneAt: done ? nowIso() : null});
+    };
+    li.onclick = ()=>{
+      const task = tasks.find(t=>t.id===id);
+      openTaskForm(task,()=>renderDay(root));
+    };
+    li.querySelector(".task-delete")?.addEventListener("click", async e=>{
+      e.stopPropagation();
+      if(!confirm("¿Borrar esta tarea?")) return;
+      await deleteTask(id);
+      renderDay(root);
+    });
+  });
+}
+
+function renderTaskItem(t){
+  const cat = getCategory(t.type);
+  const time = t.time ? `${t.time}${t.endTime?"–"+t.endTime:""}` : "";
+  const sub = [t.specialty,t.doctor,t.center].filter(Boolean).join(" · ");
+  return `
+    <li class="task-item ${t.done?"done":""} type-${cat.id}" data-task-id="${t.id}">
+      <button class="task-check" aria-label="Marcar"></button>
+      <div class="task-body">
+        <div class="task-line">
+          ${time?`<time>${time}</time>`:""}
+          <span class="task-title">${escapeHtml(t.title)}</span>
+        </div>
+        ${sub?`<small class="task-sub">${escapeHtml(sub)}</small>`:""}
+        ${t.notes?`<small class="task-notes">${escapeHtml(t.notes)}</small>`:""}
+      </div>
+      <span class="butterfly type-${cat.id}">${butterflySvg()}</span>
+      <button class="task-delete" aria-label="Borrar">✕</button>
+    </li>`;
+}
+
+/* ---------- Vista Semana ---------- */
+let weekCursor = new Date();
+
+async function renderWeek(root){
+  const start = startOfWeek(weekCursor);
+  const days = Array.from({length:7},(_,i)=>addDays(start,i));
+  const tasks = await getTasksInRange(iso(days[0]),iso(days[6]));
+  const byDate = new Map();
+  for(const t of tasks){
+    if(!byDate.has(t.date)) byDate.set(t.date,[]);
+    byDate.get(t.date).push(t);
+  }
+  for(const list of byDate.values()){
+    list.sort((a,b)=>(a.time||"99:99").localeCompare(b.time||"99:99"));
+  }
+
+  root.innerHTML = `
+    <div class="week-view">
+      <div class="week-head">
+        <button class="nav-prev">‹</button>
+        <h2 class="week-title">Semana del ${start.getDate()} ${start.toLocaleDateString("es-ES",{month:"long"})}</h2>
+        <button class="nav-next">›</button>
+      </div>
+      <div class="week-columns">
+        ${days.map(d=>{
+          const key = iso(d);
+          const list = byDate.get(key)||[];
+          const isToday = isSameDay(d,new Date());
+          return `
+            <section class="week-col ${isToday?"today":""}" data-date="${key}">
+              <header>
+                <span class="wd">${d.toLocaleDateString("es-ES",{weekday:"short"})}</span>
+                <span class="dn">${d.getDate()}</span>
+              </header>
+              <ul class="week-items">
+                ${list.map(t=>{
+                  const cat = getCategory(t.type);
+                  return `<li class="wi type-${cat.id} ${t.done?"done":""}" data-task-id="${t.id}">
+                    ${t.time?`<time>${t.time}</time>`:""}
+                    <span class="wi-title">${escapeHtml(t.title)}</span>
+                  </li>`;
+                }).join("")}
+              </ul>
+            </section>`;
+        }).join("")}
+      </div>
+    </div>`;
+
+  root.querySelector(".nav-prev").onclick = ()=>{weekCursor=addDays(weekCursor,-7);renderWeek(root);};
+  root.querySelector(".nav-next").onclick = ()=>{weekCursor=addDays(weekCursor,7);renderWeek(root);};
+  root.querySelectorAll(".week-col").forEach(col=>{
+    col.querySelector("header").onclick = ()=>{
+      const dt = new Date(col.dataset.date+"T00:00:00");
+      dayCursor = dt;
+      navigate("day");
+    };
+  });
+  root.querySelectorAll(".wi").forEach(li=>{
+    li.onclick = async e=>{
+      e.stopPropagation();
+      const task = tasks.find(t=>t.id===li.dataset.taskId);
+      openTaskForm(task,()=>renderWeek(root));
+    };
+  });
+}
+
+/* ---------- Vista Mes ---------- */
+let monthCursor = new Date();
+
+async function renderMonth(root){
+  const year = monthCursor.getFullYear();
+  const month = monthCursor.getMonth();
+  const grid = monthMatrix(year,month);
+  const tasks = await getTasksInRange(iso(grid[0][0]),iso(grid[5][6]));
+  const byDate = new Map();
+  for(const t of tasks){
+    if(!byDate.has(t.date)) byDate.set(t.date,[]);
+    byDate.get(t.date).push(t);
+  }
+
+  const today = new Date();
+  const monthName = monthCursor.toLocaleDateString("es-ES",{month:"long",year:"numeric"});
+  const wd = ["L","M","X","J","V","S","D"];
+
+  root.innerHTML = `
+    <div class="month-view">
+      <div class="month-head">
+        <button class="nav-prev">‹</button>
+        <h2 class="month-title">${monthName}</h2>
+        <button class="nav-next">›</button>
+      </div>
+      <div class="month-weekdays">${wd.map(l=>`<span>${l}</span>`).join("")}</div>
+      <div class="month-grid">
+        ${grid.flat().map(d=>{
+          const key = iso(d);
+          const inMonth = d.getMonth()===month;
+          const isToday = isSameDay(d,today);
+          const list = byDate.get(key)||[];
+          const doneCount = list.filter(t=>t.done).length;
+          return `
+            <button class="day-cell ${inMonth?"":"out"} ${isToday?"today":""}" data-date="${key}">
+              <span class="day-num">${d.getDate()}</span>
+              ${list.length?`<span class="day-dots">
+                ${list.slice(0,4).map(t=>{
+                  const cat = getCategory(t.type);
+                  return `<span class="butterfly type-${cat.id}" style="${t.done?"opacity:.4":""}">${butterflySvg()}</span>`;
+                }).join("")}
+              </span>`:""}
+              ${list.length?`<span class="day-count">${doneCount}/${list.length}</span>`:""}
+            </button>`;
+        }).join("")}
+      </div>
+    </div>`;
+
+  root.querySelector(".nav-prev").onclick = ()=>{monthCursor=addMonths(monthCursor,-1);renderMonth(root);};
+  root.querySelector(".nav-next").onclick = ()=>{monthCursor=addMonths(monthCursor,1);renderMonth(root);};
+  root.querySelectorAll(".day-cell").forEach(btn=>{
+    btn.onclick = ()=>{
+      dayCursor = new Date(btn.dataset.date+"T00:00:00");
+      navigate("day");
+    };
+  });
+}
+
+/* ---------- Vista Citas médicas ---------- */
+async function renderMedical(root){
+  const all = (await getAllTasks()).filter(t=>t.type===
+</script>
+</body>
+</html>
