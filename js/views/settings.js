@@ -1,5 +1,5 @@
 import { getAllTasks, getSetting, setSetting } from "../db.js";
-import { GOOGLE_CLIENT_ID } from "../config.js";
+import { GOOGLE_CLIENT_ID } from "../../config.js";
 import {
   initGoogle,
   requestToken,
