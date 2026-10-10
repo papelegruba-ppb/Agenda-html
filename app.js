@@ -19,7 +19,6 @@ const views = {
 
 const root = document.getElementById("view-root");
 const buttons = document.querySelectorAll("[data-view]");
-
 async function navigate(view) {
   buttons.forEach(b => b.toggleAttribute("aria-current", b.dataset.view === view));
   root.innerHTML = "";
