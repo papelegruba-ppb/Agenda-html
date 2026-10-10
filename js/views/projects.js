@@ -1,2 +1,3 @@
 export async function renderProjects(root) {
-  root.innerHTML = `<h2>Proyectos</h2><p>
+  root.innerHTML = `<h2>Proyectos</h2><p>En construcción.</p>`;
+}
