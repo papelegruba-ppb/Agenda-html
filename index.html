@@ -1,63 +1,90 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#C9A7E8">
-<title>Papelegruba</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FFF9F6">
 
-<link rel="icon" href="icons/icon-192.png">
-<link rel="preconnect" href="https://accounts.google.com">
-<link rel="preconnect" href="https://www.googleapis.com">
-<link rel="stylesheet" href="styles.css">
+  <title>Papelegruba</title>
+
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://accounts.google.com">
+  <link rel="preconnect" href="https://www.googleapis.com">
+  <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-<header class="app-header">
-  <div class="header-top">
-    <div class="brand">
-      <svg class="brand-splash" viewBox="0 0 200 80" aria-hidden="true">
-        <path class="splash-lavender" d="M10,50 C40,10 90,5 130,30 C160,50 180,55 195,45 C180,70 120,80 70,68 C30,58 15,55 10,50 Z"/>
-        <path class="splash-butter" d="M30,60 C60,35 110,30 150,50 C170,60 185,62 195,58 C175,75 120,80 70,72 C45,68 32,65 30,60 Z"/>
-      </svg>
-      <h1 class="brand-name">Papelegruba</h1>
+  <header class="app-header">
+    <div class="header-top">
+      <a class="brand" href="#" data-view="day" aria-label="Papelegruba, ir al día">
+        <img
+          class="brand-logo"
+          src="assets/logo-patricia-pelegri.png"
+          alt="Papelegruba"
+        >
+      </a>
+
+      <button
+        class="btn-settings"
+        type="button"
+        data-view="settings"
+        aria-label="Ajustes"
+        title="Ajustes"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z"/>
+          <path d="m19.4 13.5 1.1.9-1.5 2.6-1.4-.6a7.7 7.7 0 0 1-1.7 1l-.2 1.5h-3l-.3-1.5a7.7 7.7 0 0 1-1.7-1l-1.4.6-1.5-2.6 1.1-.9a7 7 0 0 1 0-2l-1.1-.9 1.5-2.6 1.4.6a7.7 7.7 0 0 1 1.7-1l.3-1.5h3l.2 1.5a7.7 7.7 0 0 1 1.7 1l1.4-.6 1.5 2.6-1.1.9a7 7 0 0 1 0 2Z" transform="translate(-1 -1)"/>
+        </svg>
+      </button>
     </div>
-    <button class="btn-settings" data-view="settings" aria-label="Ajustes">⚙️</button>
-  </div>
 
-  <nav class="view-switch-top" aria-label="Vistas">
-    <button data-view="checklist" aria-label="Checklist">
-      <span class="icon">✅</span>
-      <span class="label">Checklist</span>
-    </button>
-    <button data-view="timer" aria-label="Timer">
-      <span class="icon">⏱️</span>
-      <span class="label">Timer</span>
-    </button>
-    <button data-view="medical" aria-label="Citas">
-      <span class="icon">🩺</span>
-      <span class="label">Citas</span>
-    </button>
-    <button data-view="projects" aria-label="Proyectos">
-      <span class="icon">📁</span>
-      <span class="label">Proyectos</span>
-    </button>
-    <button data-view="habits" aria-label="Hábitos">
-      <span class="icon">🌱</span>
-      <span class="label">Hábitos</span>
-    </button>
-  </nav>
-</header>
+    <nav class="view-switch-top" aria-label="Herramientas">
+      <button type="button" data-view="checklist" aria-label="Checklist" title="Checklist">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="3"/>
+          <path d="m8 12 2.5 2.5L16 9"/>
+        </svg>
+      </button>
 
-<main>
-  <nav class="view-switch-vertical" aria-label="Tiempo">
-    <button data-view="day"   data-short="D" data-long="Día">Día</button>
-    <button data-view="week"  data-short="S" data-long="Semana">Semana</button>
-    <button data-view="month" data-short="M" data-long="Mes">Mes</button>
-    <button data-view="year"  data-short="A" data-long="Año">Año</button>
-  </nav>
-  <div id="view-root" aria-live="polite"></div>
-</main>
+      <button type="button" data-view="timer" aria-label="Temporizador" title="Temporizador">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="13" r="8"/>
+          <path d="M12 9v4l3 2M9 2h6M12 2v3"/>
+        </svg>
+      </button>
 
-<script type="module" src="app.js"></script>
+      <button type="button" data-view="medical" aria-label="Citas" title="Citas">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="4" y="6" width="16" height="15" rx="3"/>
+          <path d="M8 3v6M16 3v6M4 11h16M12 13v5M9.5 15.5h5"/>
+        </svg>
+      </button>
+
+      <button type="button" data-view="projects" aria-label="Proyectos" title="Proyectos">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/>
+        </svg>
+      </button>
+
+      <button type="button" data-view="habits" aria-label="Hábitos" title="Hábitos">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 21V11M12 15C5 15 4 10 4 6c5 0 8 2 8 7M12 12c0-5 3-8 8-8 0 5-2 9-8 9"/>
+        </svg>
+      </button>
+    </nav>
+  </header>
+
+  <main class="app-main">
+    <nav class="view-switch-vertical" aria-label="Seleccionar vista del calendario">
+      <button type="button" data-view="day" data-short="D" data-long="Día" aria-label="Vista diaria" aria-pressed="false">D</button>
+      <button type="button" data-view="week" data-short="S" data-long="Semana" aria-label="Vista semanal" aria-pressed="false">S</button>
+      <button type="button" data-view="month" data-short="M" data-long="Mes" aria-label="Vista mensual" aria-pressed="false">M</button>
+      <button type="button" data-view="year" data-short="A" data-long="Año" aria-label="Vista anual" aria-pressed="false">A</button>
+    </nav>
+
+    <div id="view-root" aria-live="polite"></div>
+  </main>
+
+  <script type="module" src="app.js"></script>
 </body>
 </html>
