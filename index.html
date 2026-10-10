@@ -6,41 +6,41 @@
 <meta name="theme-color" content="#C9A7E8">
 <title>Papelegruba</title>
 
-<link rel="manifest" href="manifest.json">
 <link rel="icon" href="icons/icon-192.png">
-
-<link rel="preload" href="fonts/fraunces-var.ttf" as="font" type="font/ttf" crossorigin>
-<link rel="preload" href="fonts/inter-var.ttf" as="font" type="font/ttf" crossorigin>
-
 <link rel="preconnect" href="https://accounts.google.com">
 <link rel="preconnect" href="https://www.googleapis.com">
-
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <header class="app-header">
-  <div class="brand">
-    <svg class="brand-splash" viewBox="0 0 200 80" aria-hidden="true">
-      <path class="splash-lavender" d="M10,50 C40,10 90,5 130,30 C160,50 180,55 195,45 C180,70 120,80 70,68 C30,58 15,55 10,50 Z"/>
-      <path class="splash-butter" d="M30,60 C60,35 110,30 150,50 C170,60 185,62 195,58 C175,75 120,80 70,72 C45,68 32,65 30,60 Z"/>
-    </svg>
-    <h1 class="brand-name">Papelegruba</h1>
+  <div class="header-top">
+    <div class="brand">
+      <svg class="brand-splash" viewBox="0 0 200 80" aria-hidden="true">
+        <path class="splash-lavender" d="M10,50 C40,10 90,5 130,30 C160,50 180,55 195,45 C180,70 120,80 70,68 C30,58 15,55 10,50 Z"/>
+        <path class="splash-butter" d="M30,60 C60,35 110,30 150,50 C170,60 185,62 195,58 C175,75 120,80 70,72 C45,68 32,65 30,60 Z"/>
+      </svg>
+      <h1 class="brand-name">Papelegruba</h1>
+    </div>
+    <button class="btn-settings" data-view="settings" aria-label="Ajustes">⚙️</button>
   </div>
-  <nav class="view-switch" aria-label="Vistas">
-    <button data-view="day">Día</button>
-    <button data-view="week">Semana</button>
-    <button data-view="month">Mes</button>
-    <button data-view="year">Año</button>
+  <nav class="view-switch view-switch-top" aria-label="Vistas">
     <button data-view="checklist">Checklist</button>
     <button data-view="timer">Timer</button>
     <button data-view="medical">Citas</button>
     <button data-view="projects">Proyectos</button>
     <button data-view="habits">Hábitos</button>
-    <button data-view="settings">Ajustes</button>
   </nav>
 </header>
 
-<main id="view-root" aria-live="polite"></main>
+<main>
+  <nav class="view-switch-vertical" aria-label="Tiempo">
+    <button data-view="day">Día</button>
+    <button data-view="week">Semana</button>
+    <button data-view="month">Mes</button>
+    <button data-view="year">Año</button>
+  </nav>
+  <div id="view-root" aria-live="polite"></div>
+</main>
 
 <script type="module" src="app.js"></script>
 </body>
