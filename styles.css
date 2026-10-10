@@ -709,3 +709,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
   .view-switch-vertical button[aria-current="page"] { width: 36px; }
 }
 
+
+.hint.small { font-size: .8rem; }
+#gcalMsg { min-height: 1rem; color: var(--c-ink-soft); }
