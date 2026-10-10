@@ -41,7 +41,20 @@
 </header>
 
 <main id="view-root" aria-live="polite"></main>
-
+<script>
+  window.addEventListener("error", (e) => {
+    const div = document.createElement("pre");
+    div.style.cssText = "position:fixed;top:0;left:0;right:0;background:#DC2127;color:#fff;padding:10px;font-size:12px;z-index:9999;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;";
+    div.textContent = "ERROR: " + (e.message || e.error) + "\n" + (e.filename || "") + ":" + (e.lineno || "");
+    document.body.appendChild(div);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    const div = document.createElement("pre");
+    div.style.cssText = "position:fixed;top:0;left:0;right:0;background:#DC2127;color:#fff;padding:10px;font-size:12px;z-index:9999;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;";
+    div.textContent = "PROMISE: " + (e.reason?.message || e.reason);
+    document.body.appendChild(div);
+  });
+</script>
 <script type="module" src="app.js"></script>
 </body>
 </html>
