@@ -42,23 +42,6 @@
 
 <main id="view-root" aria-live="polite"></main>
 
-<script>
-  // Diagnóstico: avisa si app.js no ha arrancado
-  window.__appStarted = false;
-  window.addEventListener("click", () => {
-    if (!window.__appStarted) {
-      alert("Los botones no funcionan porque app.js no ha cargado.");
-    }
-  });
-</script>
-<script type="module">
-  import("./app.js")
-    .then(() => {
-      window.__appStarted = true;
-    })
-    .catch(err => {
-      alert("ERROR AL CARGAR app.js:\n\n" + (err.stack || err.message || err));
-    });
-</script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
