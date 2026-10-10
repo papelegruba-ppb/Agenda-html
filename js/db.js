@@ -40,6 +40,7 @@ async function tx(store, mode, fn) {
 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
+/* ---------- Tareas ---------- */
 export async function addTask(partial) {
   const now = new Date().toISOString();
   const task = {
@@ -125,6 +126,7 @@ export async function getUpcomingMedical(limit = 5) {
     .slice(0, limit);
 }
 
+/* ---------- Ajustes ---------- */
 export async function getSetting(key) {
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -138,6 +140,7 @@ export async function setSetting(key, value) {
   await tx("settings", "readwrite", s => s.put({ key, value }));
 }
 
+/* ---------- Proyectos ---------- */
 export async function addProject(partial) {
   const now = new Date().toISOString();
   const project = {
@@ -148,14 +151,6 @@ export async function addProject(partial) {
   return project;
 }
 
-export async function getAllProjects() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("projects").objectStore("projects").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
 export async function getAllProjects() {
   const db = await initDB();
   return new Promise((resolve, reject) => {
