@@ -16,6 +16,9 @@ const MEDICAL_FIELDS = `
         <option>Ginecología</option>
         <option>Análisis</option>
         <option>Radiología</option>
+        <option>Otorrino/TAC</option>
+        <option>Cardiología</option>
+        <option>Neurología</option>
       </datalist>
     </label>
     <label>Doctor/a
@@ -25,7 +28,10 @@ const MEDICAL_FIELDS = `
       <input name="center" placeholder="Hospital, clínica, consulta...">
     </label>
     <label>Dirección
-      <input name="address" placeholder="Calle, número, ciudad">
+      <div style="display:flex; gap:.4rem; align-items:center;">
+        <input name="address" placeholder="Calle, número, ciudad" style="flex:1;">
+        <button type="button" class="btn-maps" title="Buscar en Google Maps">🗺️</button>
+      </div>
     </label>
     <label>Teléfono
       <input name="phone" type="tel" placeholder="+34 ...">
@@ -92,23 +98,25 @@ export function openTaskForm(task = null, onSaved) {
     actions: [
       { label: "Cancelar", onClick: ({ close }) => close() },
       { label: "Guardar", primary: true, onClick: async ({ close, bodyEl }) => {
-        const data = readForm(bodyEl);
-        if (!data.title) return;
-        let saved;
-        if (isEdit) saved = await updateTask(task.id, data);
-        else saved = await addTask(data);
-
         try {
-          const { maybeSyncTask } = await import("../google.js");
-          await maybeSyncTask(saved);
-        } catch (_) {}
-
-        close();
-        onSaved?.(saved);
+          const data = readTaskForm(bodyEl);
+          if (!data.title) { alert("Falta el título"); return; }
+          let saved;
+          if (isEdit) {
+            saved = await updateTask(task.id, data);
+          } else {
+            saved = await addTask(data);
+          }
+          close();
+          onSaved?.(saved);
+        } catch (e) {
+          alert("ERROR AL GUARDAR:\n\n" + (e.stack || e.message || e));
+        }
       }}
     ]
   });
 
+  // Picker de categoría
   const picker = bodyEl.querySelector(".cat-picker");
   bindCategoryPicker(picker, (catId) => {
     const medOnly = bodyEl.querySelector(".med-only");
@@ -117,19 +125,37 @@ export function openTaskForm(task = null, onSaved) {
     if (medRow) medRow.style.display = catId === "medical" ? "" : "none";
   });
 
+  // Estado inicial
   const initialCat = t.type || "personal";
   const medOnly = bodyEl.querySelector(".med-only");
   const medRow = bodyEl.querySelector(".med-only-hidden");
   if (medOnly) medOnly.style.display = initialCat === "medical" ? "" : "none";
   if (medRow) medRow.style.display = initialCat === "medical" ? "" : "none";
 
-  bodyEl.querySelector('[name="title"]')?.focus();
+  // Rellenar campos médicos si es edición
+  if (t.specialty) bodyEl.querySelector('[name="specialty"]').value = t.specialty;
+  if (t.doctor)    bodyEl.querySelector('[name="doctor"]').value = t.doctor;
+  if (t.center)    bodyEl.querySelector('[name="center"]').value = t.center;
+  if (t.address)   bodyEl.querySelector('[name="address"]').value = t.address;
+  if (t.phone)     bodyEl.querySelector('[name="phone"]').value = t.phone;
+  if (t.reminderMinutes) bodyEl.querySelector('[name="reminderMinutes"]').value = String(t.reminderMinutes);
+
+  // Botón Google Maps
+  bodyEl.querySelector(".btn-maps")?.addEventListener("click", () => {
+    const dir = bodyEl.querySelector('[name="address"]').value.trim();
+    if (!dir) { alert("Escribe una dirección primero."); return; }
+    const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dir)}`;
+    window.open(url, "_blank");
+  });
+
+  // Foco al título
+  setTimeout(() => bodyEl.querySelector('[name="title"]')?.focus(), 100);
 }
 
-function readForm(root) {
+function readTaskForm(root) {
   const form = root.querySelector("form");
   const fd = new FormData(form);
-  const cat = getSelectedCategory(root);
+  const cat = root.querySelector('.cat-chip[aria-checked="true"]')?.dataset.cat || "personal";
   const data = {
     title: (fd.get("title") || "").toString().trim(),
     notes: (fd.get("notes") || "").toString(),
