@@ -392,6 +392,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 .fab:active { transform: scale(.95); }
 
 /* ============ Vista Semana ============ */
+/* ============ Vista Semana (v2) ============ */
 .week-view { display: flex; flex-direction: column; gap: 1rem; }
 
 .week-head {
@@ -408,7 +409,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 .week-title {
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: 1.25rem;
+  font-size: 1.15rem;
   margin: 0;
   color: var(--c-ink);
   text-align: center;
@@ -429,13 +430,31 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 .week-day-name {
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: var(--c-ink);
   text-transform: capitalize;
+  cursor: pointer;
 }
-.week-day-num { font-size: .85rem; color: var(--c-ink-soft); }
+.week-day-num {
+  font-size: .85rem;
+  color: var(--c-ink-soft);
+  margin-right: auto;
+}
 .week-day.today .week-day-name { color: var(--c-lavender-dk); }
 .week-day.today .week-day-head { border-bottom-color: var(--c-lavender); }
+
+.week-day-add {
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  color: var(--c-ink-soft);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.week-day-add:active { background: var(--c-lavender-2); }
 
 .week-day-list {
   list-style: none;
@@ -443,12 +462,84 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: .45rem;
+  gap: .35rem;
 }
-.week-day .task-item { grid-template-columns: 48px 1fr auto; padding: .6rem .75rem; }
-.week-day .task-title { font-size: 1rem; }
+.empty-week {
+  color: var(--c-ink-mute);
+  font-size: .8rem;
+  font-style: italic;
+  padding: .25rem .5rem;
+}
 
-/* ============ Vista Mes ============ */
+/* Tarea en la vista Semana */
+.wi {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: .5rem;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-left: 3px solid var(--c-personal);
+  border-radius: 10px;
+  padding: .4rem .6rem;
+  cursor: pointer;
+  transition: transform .1s ease;
+}
+.wi:active { transform: scale(.99); }
+
+.wi.type-work-sye     { border-left-color: var(--c-work-sye); }
+.wi.type-work-jac     { border-left-color: var(--c-work-jac); }
+.wi.type-app          { border-left-color: var(--c-app); }
+.wi.type-extra-family { border-left-color: var(--c-extra-family); }
+.wi.type-extra-client { border-left-color: var(--c-extra-client); }
+.wi.type-medical      { border-left-color: var(--c-medical); }
+.wi.type-vacation     { border-left-color: var(--c-vacation); }
+.wi.type-personal     { border-left-color: var(--c-personal); }
+.wi.type-event        { border-left-color: var(--c-event); }
+
+.wi.done { opacity: .55; }
+.wi.done .wi-title { text-decoration: line-through; }
+
+.wi-butterfly {
+  display: inline-block;
+  width: 16px; height: 16px;
+}
+.wi-butterfly.type-work-sye     { color: var(--c-work-sye); }
+.wi-butterfly.type-work-jac     { color: var(--c-work-jac); }
+.wi-butterfly.type-app          { color: #E5C93B; }
+.wi-butterfly.type-extra-family { color: var(--c-extra-family); }
+.wi-butterfly.type-extra-client { color: var(--c-extra-client); }
+.wi-butterfly.type-medical      { color: var(--c-medical); }
+.wi-butterfly.type-vacation     { color: var(--c-vacation); }
+.wi-butterfly.type-personal     { color: var(--c-personal); }
+.wi-butterfly.type-event        { color: var(--c-event); }
+
+.wi-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.wi time {
+  font-variant-numeric: tabular-nums;
+  font-size: .72rem;
+  color: var(--c-ink-soft);
+}
+.wi-title {
+  font-size: .92rem;
+  font-weight: 500;
+  color: var(--c-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wi small {
+  font-size: .72rem;
+  color: var(--c-ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}/* ============ Vista Mes ============ */
 .month-view { display: flex; flex-direction: column; gap: .75rem; }
 
 .month-head {
