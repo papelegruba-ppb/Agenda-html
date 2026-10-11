@@ -1,4 +1,4 @@
-import { getAllTasks, getSetting, setSetting } from "../db.js";
+import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting } from "../db.js";
 import { GOOGLE_CLIENT_ID } from "../../config.js";
 import {
   initGoogle,
@@ -143,11 +143,12 @@ export async function renderSettings(root) {
 
   /* Exportar JSON */
   root.querySelector("#btnExport").onclick = async () => {
-    const tasks = await getAllTasks();
+    const [tasks, habits, projects, notes, sessions, payments, settings] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings()]);
     const payload = {
-      version: 1,
+      format: "papelegruba-backup",
+      version: 2,
       exportedAt: new Date().toISOString(),
-      tasks
+      tasks, habits, projects, notes, sessions, payments, settings
     };
     const blob = new Blob(
       [JSON.stringify(payload, null, 2)],
@@ -182,62 +183,23 @@ export async function renderSettings(root) {
         return;
       }
 
-      const incoming = Array.isArray(data.tasks) ? data.tasks : [];
-      if (!incoming.length) {
-        localMsg.textContent = "⚠️ El archivo no contiene tareas.";
+      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings"];
+      const total = collections.reduce((sum, key) => sum + (Array.isArray(data[key]) ? data[key].length : 0), 0);
+      if (!total) {
+        localMsg.textContent = "⚠️ El archivo no contiene datos reconocibles.";
         return;
       }
-
-      if (!confirm(`¿Importar ${incoming.length} tareas?`)) {
+      if (!confirm(`Se combinarán ${total} registros del respaldo con los datos de este dispositivo. Los registros con el mismo ID/clave se actualizarán; los demás se conservarán. No se borrarán datos. ¿Continuar?`)) {
         localMsg.textContent = "";
         return;
       }
-
-      const { addTask } = await import("../db.js");
-      let ok = 0;
-      let fail = 0;
-
-      for (let i = 0; i < incoming.length; i++) {
-        const t = incoming[i];
-
-        // Ignoramos id original: addTask genera uno nuevo
-        // Ignoramos campos que puedan romper IndexedDB
-        const clean = {
-          type: t.type || "personal",
-          title: t.title || "",
-          notes: t.notes || "",
-          date: typeof t.date === "string" ? t.date : "",
-          time: t.time || "",
-          endTime: t.endTime || "",
-          duration: t.duration || 25,
-          projectId: t.projectId || null,
-          tags: Array.isArray(t.tags) ? t.tags : [],
-          priority: t.priority || 0,
-          done: !!t.done,
-          doneAt: t.doneAt || null,
-          specialty: t.specialty || null,
-          doctor: t.doctor || null,
-          center: t.center || null,
-          address: t.address || null,
-          phone: t.phone || null,
-          reminderMinutes: t.reminderMinutes ?? null,
-          gcalEventId: t.gcalEventId || null
-        };
-
-        try {
-          await addTask(clean);
-          ok++;
-        } catch (e) {
-          console.warn("Error importando tarea:", t, e);
-          fail++;
-        }
-
-        if (i % 20 === 0) {
-          localMsg.textContent = `Importando… ${i + 1} / ${incoming.length}`;
-        }
+      try {
+        const count = await mergeBackupData(data);
+        localMsg.textContent = `✅ Restauración completada: ${count} registros procesados. Los datos existentes no se han borrado.`;
+      } catch (e) {
+        localMsg.textContent = "❌ Error restaurando el respaldo: " + (e.message || e);
+        return;
       }
-
-      localMsg.textContent = `✅ Importadas ${ok} tareas${fail ? `, ${fail} con error` : ""}.`;
       setTimeout(() => renderSettings(root), 1500);
     };
 
