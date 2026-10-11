@@ -227,13 +227,13 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
   outline-offset: 2px;
 }
 
-/* ============ Mariposas (lineales, color por categoría) ============ */
+/* ============ Mariposas ============ */
 .butterfly {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   vertical-align: middle;
   flex: 0 0 auto;
 }
@@ -243,7 +243,6 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
   display: block;
   color: inherit;
 }
-
 .butterfly.type-work-sye     { color: var(--c-work-sye); }
 .butterfly.type-work-jac     { color: var(--c-work-jac); }
 .butterfly.type-app          { color: #E5C93B; }
@@ -253,10 +252,9 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 .butterfly.type-vacation     { color: var(--c-vacation); }
 .butterfly.type-personal     { color: var(--c-personal); }
 .butterfly.type-event        { color: var(--c-event); }
-
 .butterfly.done { opacity: .4; }
 
-/* Más pequeñas en el calendario mensual */
+/* En el calendario mensual y dots */
 .month-grid .butterfly,
 .day-dots .butterfly {
   width: 14px;
