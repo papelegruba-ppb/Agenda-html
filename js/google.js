@@ -197,4 +197,3 @@ export function gcalEventToTask(event) {
     gcalUpdated: event.updated,
     allDay: isAllDay
   };
-    }
