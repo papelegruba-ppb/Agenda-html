@@ -12,7 +12,7 @@ export function setDayCursor(date) {
 
 export async function renderDay(root) {
   const dateStr = iso(cursor);
-  const tasks = await getTasksByDate(dateStr);
+  const tasks = (await getTasksByDate(dateStr)).filter(t => t.isChecklist !== true);
   tasks.sort((a, b) => {
     if (!a.time && b.time) return 1;
     if (a.time && !b.time) return -1;
