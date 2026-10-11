@@ -25,13 +25,13 @@ export async function renderTimer(root) {
       <div class="hours-head">
         <h2 class="hours-title">Horas</h2>
         <div class="hours-cat-picker">
-          ${CATEGORIES.map(c => `
-            <button type="button" class="hours-cat-chip ${c.id === currentCategory ? "active" : ""}" data-cat="${c.id}">
-              <span class="dot" style="background:${c.color}"></span>
-              ${c.label}
-            </button>
-          `).join("")}
-        </div>
+  ${CATEGORIES.filter(c => ["work-sye", "work-jac", "extra-client"].includes(c.id)).map(c => `
+    <button type="button" class="hours-cat-chip ${c.id === currentCategory ? "active" : ""}" data-cat="${c.id}">
+      <span class="dot" style="background:${c.color}"></span>
+      ${c.label}
+    </button>
+  `).join("")}
+</div>
       </div>
 
       <div class="hours-summary">
