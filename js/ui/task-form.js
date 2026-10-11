@@ -2,6 +2,7 @@ import { openModal } from "./modal.js";
 import { renderCategoryPicker, bindCategoryPicker, getSelectedCategory } from "./category-picker.js";
 import { addTask, updateTask } from "../db.js";
 import { iso } from "../dates.js";
+import { startTimer, getActiveTimer, stopTimer } from "../hours.js";
 
 const MEDICAL_FIELDS = `
   <div class="med-only">
@@ -55,6 +56,9 @@ export function openTaskForm(task = null, onSaved) {
     type: "personal", priority: 0, duration: 25
   };
 
+  const activeTimer = getActiveTimer();
+  const thisTaskIsTimer = activeTimer && t.id && activeTimer.taskId === t.id;
+
   const body = `
     <form class="task-form" autocomplete="off">
       <label class="fld-title">Título
@@ -92,31 +96,63 @@ export function openTaskForm(task = null, onSaved) {
     </form>
   `;
 
+  const actions = [
+    { label: "Cancelar", onClick: ({ close }) => close() }
+  ];
+
+  // Botón "Empezar a contar" solo si la tarea ya existe (isEdit)
+  if (isEdit) {
+    if (thisTaskIsTimer) {
+      actions.push({
+        label: "⏹ Parar cronómetro",
+        onClick: ({ close }) => {
+          stopTimer();
+          close();
+          onSaved?.();
+        }
+      });
+    } else {
+      actions.push({
+        label: "⏱ Empezar a contar",
+        onClick: ({ close }) => {
+          startTimer({
+            taskId: t.id,
+            taskTitle: t.title,
+            categoryId: t.type || "personal"
+          });
+          close();
+          onSaved?.();
+        }
+      });
+    }
+  }
+
+  actions.push({
+    label: isEdit ? "Guardar" : "Crear",
+    primary: true,
+    onClick: async ({ close, bodyEl }) => {
+      try {
+        const data = readTaskForm(bodyEl);
+        if (!data.title) { alert("Falta el título"); return; }
+        if (isEdit) {
+          await updateTask(t.id, data);
+        } else {
+          await addTask(data);
+        }
+        close();
+        onSaved?.();
+      } catch (e) {
+        alert("ERROR AL GUARDAR:\n\n" + (e.stack || e.message || e));
+      }
+    }
+  });
+
   const { bodyEl, close } = openModal({
     title: isEdit ? "Editar tarea" : "Nueva tarea",
     body,
-    actions: [
-      { label: "Cancelar", onClick: ({ close }) => close() },
-      { label: "Guardar", primary: true, onClick: async ({ close, bodyEl }) => {
-        try {
-          const data = readTaskForm(bodyEl);
-          if (!data.title) { alert("Falta el título"); return; }
-          let saved;
-          if (isEdit) {
-            saved = await updateTask(task.id, data);
-          } else {
-            saved = await addTask(data);
-          }
-          close();
-          onSaved?.(saved);
-        } catch (e) {
-          alert("ERROR AL GUARDAR:\n\n" + (e.stack || e.message || e));
-        }
-      }}
-    ]
+    actions
   });
 
-  // Picker de categoría
   const picker = bodyEl.querySelector(".cat-picker");
   bindCategoryPicker(picker, (catId) => {
     const medOnly = bodyEl.querySelector(".med-only");
@@ -125,14 +161,12 @@ export function openTaskForm(task = null, onSaved) {
     if (medRow) medRow.style.display = catId === "medical" ? "" : "none";
   });
 
-  // Estado inicial
   const initialCat = t.type || "personal";
   const medOnly = bodyEl.querySelector(".med-only");
   const medRow = bodyEl.querySelector(".med-only-hidden");
   if (medOnly) medOnly.style.display = initialCat === "medical" ? "" : "none";
   if (medRow) medRow.style.display = initialCat === "medical" ? "" : "none";
 
-  // Rellenar campos médicos si es edición
   if (t.specialty) bodyEl.querySelector('[name="specialty"]').value = t.specialty;
   if (t.doctor)    bodyEl.querySelector('[name="doctor"]').value = t.doctor;
   if (t.center)    bodyEl.querySelector('[name="center"]').value = t.center;
@@ -140,7 +174,6 @@ export function openTaskForm(task = null, onSaved) {
   if (t.phone)     bodyEl.querySelector('[name="phone"]').value = t.phone;
   if (t.reminderMinutes) bodyEl.querySelector('[name="reminderMinutes"]').value = String(t.reminderMinutes);
 
-  // Botón Google Maps
   bodyEl.querySelector(".btn-maps")?.addEventListener("click", () => {
     const dir = bodyEl.querySelector('[name="address"]').value.trim();
     if (!dir) { alert("Escribe una dirección primero."); return; }
@@ -148,7 +181,6 @@ export function openTaskForm(task = null, onSaved) {
     window.open(url, "_blank");
   });
 
-  // Foco al título
   setTimeout(() => bodyEl.querySelector('[name="title"]')?.focus(), 100);
 }
 
