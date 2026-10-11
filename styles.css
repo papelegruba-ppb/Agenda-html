@@ -1053,3 +1053,70 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
   .fab,
   .session-item { transition: none; }
 }
+/* ============ Vista Checklist ============ */
+.checklist-view { display: flex; flex-direction: column; gap: .75rem; }
+
+.checklist-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .5rem;
+  margin-top: .5rem;
+}
+
+.checklist-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+
+.checklist-item {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: .6rem;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-left: 4px solid var(--c-personal);
+  border-radius: 12px;
+  padding: .7rem .85rem;
+  cursor: pointer;
+  transition: box-shadow .15s ease, transform .1s ease;
+}
+.checklist-item:active { transform: scale(.995); }
+
+.checklist-item.done { opacity: .55; }
+.checklist-item.done .task-title { text-decoration: line-through; }
+
+.task-check-round {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--c-border);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  flex: 0 0 auto;
+  position: relative;
+}
+.task-check-round:active { transform: scale(.92); }
+.checklist-item.done .task-check-round {
+  background: var(--c-done);
+  border-color: var(--c-done);
+}
+.checklist-item.done .task-check-round::after {
+  content: "✓";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: .8rem;
+  font-weight: bold;
+}
+
+.checklist-list.past { margin-top: .25rem; }
