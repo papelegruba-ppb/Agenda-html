@@ -65,14 +65,27 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toStr
 /* ============ TAREAS ============ */
 export async function addTask(partial) {
   const now = new Date().toISOString();
+
+  // Ignoramos cualquier id que venga en el partial; siempre generamos uno nuevo
+  const { id: _ignoredId, ...safePartial } = partial || {};
+
   const task = {
-    id: uid(), type: "personal", title: "", notes: "",
-    date: null, time: null, endTime: null, duration: 25,
+    id: uid(),
+    type: "personal", title: "", notes: "",
+    date: "", time: "", endTime: "", duration: 25,
     projectId: null, tags: [], priority: 0,
     done: false, doneAt: null,
     createdAt: now, updatedAt: now, gcalEventId: null,
-    ...partial
+    ...safePartial
   };
+
+  // Sanear para IndexedDB
+  if (!task.id) task.id = uid();
+  if (task.date === null || task.date === undefined) task.date = "";
+  if (typeof task.date !== "string") task.date = String(task.date);
+  if (!task.type) task.type = "personal";
+  if (typeof task.type !== "string") task.type = "personal";
+
   await tx("tasks", "readwrite", s => s.put(task));
   return task;
 }
@@ -85,6 +98,13 @@ export async function updateTask(id, patch) {
     const req = s.get(id);
     req.onsuccess = () => {
       const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
+
+      // Sanear
+      if (merged.date === null || merged.date === undefined) merged.date = "";
+      if (typeof merged.date !== "string") merged.date = String(merged.date);
+      if (!merged.type) merged.type = "personal";
+      if (typeof merged.type !== "string") merged.type = "personal";
+
       s.put(merged);
       t.oncomplete = () => resolve(merged);
     };
@@ -139,7 +159,7 @@ export async function getUpcomingMedical(limit = 5) {
   const all = await getAllTasks();
   const today = new Date().toISOString().slice(0, 10);
   return all
-    .filter(t => t.type === "medical" && !t.done && t.date >= today)
+    .filter(t => t.type === "medical" && !t.done && t.date && t.date >= today)
     .sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")))
     .slice(0, limit);
 }
@@ -281,4 +301,4 @@ export async function getAllPayments() {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
-                                    }
+}
