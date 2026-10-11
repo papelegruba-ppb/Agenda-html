@@ -1,6 +1,6 @@
 export const CATEGORIES = [
   { id: "work-sye",     label: "SYE",               color: "#8E7CC3", colorName: "grape",     colorId: "3",  billable: true,  rate: 8.5  },
-  { id: "work-jac",     label: "JAC",               color: "#DC2127", colorName: "tomato",    colorId: "11", billable: false, rate: 0    },
+  { id: "work-jac",     label: "JAC",               color: "#DC2127", colorName: "tomato",    colorId: "11", billable: true,  rate: 10   },
   { id: "app",          label: "Apps propias",      color: "#F4E87A", colorName: "citron",    colorId: "5",  billable: false, rate: 0    },
   { id: "extra-family", label: "Extras · familia",  color: "#5484ED", colorName: "chicory",   colorId: "9",  billable: false, rate: 0    },
   { id: "extra-client", label: "Extras · clientes", color: "#FF887C", colorName: "flamingo",  colorId: "4",  billable: true,  rate: 10   },
