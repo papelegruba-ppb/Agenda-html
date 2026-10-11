@@ -1,25 +1,47 @@
 export function butterflySvg() {
   return `
-    <svg viewBox="0 0 48 48" class="butterfly-svg" aria-hidden="true">
-      <defs>
-        <filter id="butterfly-shadow" x="-20%" y="-20%" width="140%" height="140%">
-          <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="currentColor" flood-opacity="0.35"/>
-        </filter>
-      </defs>
-      <g filter="url(#butterfly-shadow)" fill="none"
-         stroke="currentColor" stroke-width="2"
-         stroke-linecap="round" stroke-linejoin="round">
-        <path d="M24 22 C18 8 6 6 4 12 C2 18 10 22 20 22"/>
-        <path d="M24 22 C30 8 42 6 44 12 C46 18 38 22 28 22"/>
-        <path d="M24 22 C18 30 8 32 6 38 C4 43 12 42 18 36 C22 32 24 26 24 22"/>
-        <path d="M24 22 C30 30 40 32 42 38 C44 43 36 42 30 36 C26 32 24 26 24 22"/>
-        <line x1="24" y1="18" x2="24" y2="30"/>
-        <circle cx="24" cy="17" r="1.5"/>
-        <path d="M24 17 C22 13 19 11 18 10"/>
-        <path d="M24 17 C26 13 29 11 30 10"/>
-        <circle cx="18" cy="10" r="0.8" fill="currentColor"/>
-        <circle cx="30" cy="10" r="0.8" fill="currentColor"/>
-      </g>
+    <svg viewBox="0 0 64 64" class="butterfly-svg" aria-hidden="true"
+         fill="none" stroke="currentColor"
+         stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <!-- Ala superior izquierda -->
+      <path d="M32 30
+               C 24 12, 8 4, 4 12
+               C 0 20, 10 28, 26 30"/>
+      <path d="M26 30
+               C 14 32, 6 38, 10 44
+               C 14 50, 26 46, 32 34"/>
+
+      <!-- Ala superior derecha -->
+      <path d="M32 30
+               C 40 12, 56 4, 60 12
+               C 64 20, 54 28, 38 30"/>
+      <path d="M38 30
+               C 50 32, 58 38, 54 44
+               C 50 50, 38 46, 32 34"/>
+
+      <!-- Ala inferior izquierda -->
+      <path d="M32 34
+               C 26 42, 16 48, 14 54
+               C 12 60, 22 60, 28 54
+               C 31 50, 32 44, 32 38"/>
+
+      <!-- Ala inferior derecha -->
+      <path d="M32 34
+               C 38 42, 48 48, 50 54
+               C 52 60, 42 60, 36 54
+               C 33 50, 32 44, 32 38"/>
+
+      <!-- Cuerpo (fino, vertical) -->
+      <line x1="32" y1="26" x2="32" y2="42"/>
+
+      <!-- Cabeza -->
+      <circle cx="32" cy="24" r="1.5" fill="currentColor"/>
+
+      <!-- Antenas -->
+      <path d="M32 24 C 28 18, 24 14, 22 12"/>
+      <path d="M32 24 C 36 18, 40 14, 42 12"/>
+      <circle cx="22" cy="12" r="1" fill="currentColor"/>
+      <circle cx="42" cy="12" r="1" fill="currentColor"/>
     </svg>
   `;
 }
