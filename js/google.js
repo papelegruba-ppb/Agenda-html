@@ -195,6 +195,6 @@ export function gcalEventToTask(event) {
     done: false,
     gcalEventId: event.id,
     gcalUpdated: event.updated,
-    allDay: isDay ? true : isAllDay
+    allDay: isAllDay
   };
     }
