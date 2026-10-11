@@ -2,6 +2,7 @@ import { startOfWeek, addDays, iso, isSameDay } from "../dates.js";
 import { getTasksInRange } from "../db.js";
 import { getCategory } from "../categories.js";
 import { openTaskForm } from "../ui/task-form.js";
+import { butterflySvg } from "../ui/butterfly.js";
 
 let cursor = new Date();
 
