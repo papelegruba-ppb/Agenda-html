@@ -94,7 +94,9 @@ function renderWeekItem(t) {
         ${desc ? `<small class="task-notes">${escapeHtml(desc)}</small>` : ""}
       </div>
       <span class="butterfly type-${cat.id}" aria-hidden="true">
-        <svg viewBox="0 0 24 24">
+  ${butterflySvg()}
+</span>
+<svg viewBox="0 0 24 24">
           <path class="wing" d="M12 6 C9 2 3 2 2 7 C1 12 6 14 10 13 C7 15 4 19 8 21 C11 22 12 18 12 15 C12 18 13 22 16 21 C20 19 17 15 14 13 C18 14 23 12 22 7 C21 2 15 2 12 6 Z"/>
         </svg>
       </span>
