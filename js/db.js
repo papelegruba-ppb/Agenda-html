@@ -16,7 +16,6 @@ export function initDB() {
         return null;
       };
 
-      // Tasks
       if (!db.objectStoreNames.contains("tasks")) {
         const s = db.createObjectStore("tasks", { keyPath: "id" });
         s.createIndex("by_date", "date");
@@ -24,26 +23,22 @@ export function initDB() {
         s.createIndex("by_date_type", ["date", "type"]);
       }
 
-      // Otros
       mk("projects");
       mk("notes");
       mk("habits");
 
-      // Sessions
       if (!db.objectStoreNames.contains("sessions")) {
         const s = db.createObjectStore("sessions", { keyPath: "id" });
         s.createIndex("by_date", "date");
         s.createIndex("by_category", "categoryId");
       }
 
-      // Payments
       if (!db.objectStoreNames.contains("payments")) {
         const p = db.createObjectStore("payments", { keyPath: "id" });
         p.createIndex("by_date", "date");
         p.createIndex("by_category", "categoryId");
       }
 
-      // Settings
       if (!db.objectStoreNames.contains("settings")) {
         db.createObjectStore("settings", { keyPath: "key" });
       }
@@ -286,4 +281,4 @@ export async function getAllPayments() {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
-      }
+                                    }
