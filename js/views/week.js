@@ -11,7 +11,7 @@ export async function renderWeek(root) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const fromStr = iso(days[0]);
   const toStr = iso(days[6]);
-  const tasks = await getTasksInRange(fromStr, toStr);
+  const tasks = (await getTasksInRange(fromStr, toStr)).filter(t => t.isChecklist !== true);
 
   const byDate = new Map();
   for (const t of tasks) {
