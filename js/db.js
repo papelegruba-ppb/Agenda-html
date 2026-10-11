@@ -1,31 +1,432 @@
-const DB_NAME="papelegruba";const DB_VERSION=2;let dbPromise;
-export function initDB(){if(dbPromise)return dbPromise;dbPromise=new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,DB_VERSION);req.onupgradeneeded=e=>{const db=e.target.result;const mk=(name,opts={keyPath:"id"})=>{if(!db.objectStoreNames.contains(name))return db.createObjectStore(name,opts);return null;};if(!db.objectStoreNames.contains("tasks")){const s=db.createObjectStore("tasks",{keyPath:"id"});s.createIndex("by_date","date");s.createIndex("by_type","type");s.createIndex("by_date_type",["date","type"]);}mk("projects");mk("notes");mk("habits");if(!db.objectStoreNames.contains("sessions")){const s=db.createObjectStore("sessions",{keyPath:"id"});s.createIndex("by_date","date");s.createIndex("by_category","categoryId");}if(!db.objectStoreNames.contains("payments")){const s=db.createObjectStore("payments",{keyPath:"id"});s.createIndex("by_date","date");s.createIndex("by_category","categoryId");}mk("settings",{keyPath:"key"});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});return dbPromise;}
-async function tx(store,mode,fn){const db=await initDB();return new Promise((resolve,reject)=>{const t=db.transaction(store,mode);const s=t.objectStore(store);const out=fn(s);t.oncomplete=()=>resolve(out?.result??out);t.onerror=()=>reject(t.error);});}
-const uid=()=>crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36);
-function sanitizeTask(task){if(task.date==null)task.date="";if(typeof task.date!=="string")task.date=String(task.date);task.isChecklist=task.isChecklist===true;if(typeof task.type!=="string"||(!task.type&&!task.isChecklist))task.type="personal";if(task.isChecklist&&task.type==null)task.type="";task.checklistRepeat=["daily","weekly","monthly","custom"].includes(task.checklistRepeat)?task.checklistRepeat:null;task.checklistRepeatDays=Array.isArray(task.checklistRepeatDays)?task.checklistRepeatDays.map(Number).filter(n=>Number.isInteger(n)&&n>=0&&n<=6):[];task.checklistDoneDate=task.checklistDoneDate||null;task.habitId=task.habitId||null;return task;}
-export async function addTask(partial){const now=new Date().toISOString();const{id:_ignoredId,...safePartial}=partial||{};const task=sanitizeTask({id:uid(),type:"personal",title:"",notes:"",date:"",time:"",endTime:"",duration:25,projectId:null,tags:[],priority:0,done:false,doneAt:null,createdAt:now,updatedAt:now,gcalEventId:null,isChecklist:false,checklistRepeat:null,checklistRepeatDays:[],checklistDoneDate:null,habitId:null,...safePartial});await tx("tasks","readwrite",s=>s.put(task));return task;}
-export async function updateTask(id,patch){const db=await initDB();return new Promise((resolve,reject)=>{const t=db.transaction("tasks","readwrite"),s=t.objectStore("tasks"),req=s.get(id);req.onsuccess=()=>{if(!req.result){reject(new Error(`No existe la tarea ${id}`));return;}const merged=sanitizeTask({...req.result,...patch,updatedAt:new Date().toISOString()});s.put(merged);t.oncomplete=()=>resolve(merged);};req.onerror=()=>reject(req.error);t.onerror=()=>reject(t.error);});}
-export async function deleteTask(id){return tx("tasks","readwrite",s=>s.delete(id));}
-export async function getTasksByDate(dateStr){const db=await initDB();return new Promise((resolve,reject)=>{const req=db.transaction("tasks").objectStore("tasks").index("by_date").getAll(IDBKeyRange.only(dateStr));req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-export async function getTasksInRange(fromStr,toStr){const db=await initDB();return new Promise((resolve,reject)=>{const req=db.transaction("tasks").objectStore("tasks").index("by_date").getAll(IDBKeyRange.bound(fromStr,toStr));req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-export async function getAllTasks(){const db=await initDB();return new Promise((resolve,reject)=>{const req=db.transaction("tasks").objectStore("tasks").getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-export async function getMedicalInRange(fromStr,toStr){const db=await initDB();return new Promise((resolve,reject)=>{const req=db.transaction("tasks").objectStore("tasks").index("by_date_type").getAll(IDBKeyRange.bound([fromStr,"medical"],[toStr,"medical"]));req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-export async function getUpcomingMedical(limit=5){const all=await getAllTasks();const today=new Date().toISOString().slice(0,10);return all.filter(t=>t.type==="medical"&&!t.done&&t.date&&t.date>=today).sort((a,b)=>(a.date+(a.time||"")).localeCompare(b.date+(b.time||""))).slice(0,limit);}
-export async function getSetting(key){const db=await initDB();return new Promise((resolve,reject)=>{const req=db.transaction("settings").objectStore("settings").get(key);req.onsuccess=()=>resolve(req.result?.value??null);req.onerror=()=>reject(req.error);});}
-export async function setSetting(key,value){await tx("settings","readwrite",s=>s.put({key,value}));}
-export async function addProject(partial){const now=new Date().toISOString();const p={id:uid(),name:"",color:"#C9A7E8",archived:false,createdAt:now,...partial};await tx("projects","readwrite",s=>s.put(p));return p;}
-export async function getAllProjects(){const db=await initDB();return new Promise((resolve,reject)=>{const req=db.transaction("projects").objectStore("projects").getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-export async function addSession(partial){const now=new Date().toISOString();const s={id:uid(),date:now.slice(0,10),startTime:"00:00",endTime:"00:00",durationMinutes:0,categoryId:"personal",taskId:null,taskTitle:null,description:"",billable:false,rate:0,amount:0,billed:false,billedAt:null,adjustment:false,createdAt:now,...partial};await tx("sessions","readwrite",x=>x.put(s));return s;}
-export async function updateSession(id,patch){const db=await initDB();return new Promise((resolve,reject)=>{const t=db.transaction("sessions","readwrite"),s=t.objectStore("sessions"),req=s.get(id);req.onsuccess=()=>{if(!req.result){reject(new Error("Sesión no encontrada"));return;}const merged={...req.result,...patch};s.put(merged);t.oncomplete=()=>resolve(merged);};req.onerror=()=>reject(req.error);});}
-export async function deleteSession(id){return tx("sessions","readwrite",s=>s.delete(id));}
-export async function getAllSessions(){const db=await initDB();return new Promise((resolve,reject)=>{const req=db.transaction("sessions").objectStore("sessions").getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-export async function getSessionsByCategory(categoryId){return (await getAllSessions()).filter(s=>s.categoryId===categoryId);}
-export async function addPayment(partial){const now=new Date().toISOString();const p={id:uid(),date:now.slice(0,10),amount:0,categoryId:"work-sye",method:"otro",note:"",appliedToSessions:[],createdAt:now,...partial};await tx("payments","readwrite",s=>s.put(p));return p;}
-export async function updatePayment(id,patch){const db=await initDB();return new Promise((resolve,reject)=>{const t=db.transaction("payments","readwrite"),s=t.objectStore("payments"),req=s.get(id);req.onsuccess=()=>{if(!req.result){reject(new Error("Cobro no encontrado"));return;}const merged={...req.result,...patch};s.put(merged);t.oncomplete=()=>resolve(merged);};req.onerror=()=>reject(req.error);});}
-export async function deletePayment(id){return tx("payments","readwrite",s=>s.delete(id));}
-export async function getAllPayments(){const db=await initDB();return new Promise((resolve,reject)=>{const req=db.transaction("payments").objectStore("payments").getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-/* Hábitos: se conserva el almacén existente, sin modificar la versión de IndexedDB. */
-export async function addHabit(partial){const now=new Date().toISOString();const habit={id:uid(),title:"",notes:"",type:"personal",sourceTaskId:null,done:false,doneAt:null,active:true,createdAt:now,updatedAt:now,...partial};await tx("habits","readwrite",s=>s.put(habit));return habit;}
-export async function updateHabit(id,patch){const db=await initDB();return new Promise((resolve,reject)=>{const t=db.transaction("habits","readwrite"),s=t.objectStore("habits"),req=s.get(id);req.onsuccess=()=>{if(!req.result){reject(new Error(`No existe el hábito ${id}`));return;}const merged={...req.result,...patch,updatedAt:new Date().toISOString()};s.put(merged);t.oncomplete=()=>resolve(merged);};req.onerror=()=>reject(req.error);t.onerror=()=>reject(t.error);});}
-export async function deleteHabit(id){return tx("habits","readwrite",s=>s.delete(id));}
-export async function getAllHabits(){const db=await initDB();return new Promise((resolve,reject)=>{const req=db.transaction("habits").objectStore("habits").getAll();req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
+const DB_NAME = "papelegruba";
+const DB_VERSION = 2;
+let dbPromise;
+
+export function initDB() {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+
+      const mk = (name, opts = { keyPath: "id" }) => {
+        if (!db.objectStoreNames.contains(name)) {
+          return db.createObjectStore(name, opts);
+        }
+        return null;
+      };
+
+      if (!db.objectStoreNames.contains("tasks")) {
+        const s = db.createObjectStore("tasks", { keyPath: "id" });
+        s.createIndex("by_date", "date");
+        s.createIndex("by_type", "type");
+        s.createIndex("by_date_type", ["date", "type"]);
+      }
+
+      mk("projects");
+      mk("notes");
+      mk("habits");
+
+      if (!db.objectStoreNames.contains("sessions")) {
+        const s = db.createObjectStore("sessions", { keyPath: "id" });
+        s.createIndex("by_date", "date");
+        s.createIndex("by_category", "categoryId");
+      }
+
+      if (!db.objectStoreNames.contains("payments")) {
+        const p = db.createObjectStore("payments", { keyPath: "id" });
+        p.createIndex("by_date", "date");
+        p.createIndex("by_category", "categoryId");
+      }
+
+      if (!db.objectStoreNames.contains("settings")) {
+        db.createObjectStore("settings", { keyPath: "key" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+  return dbPromise;
+}
+
+async function tx(store, mode, fn) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(store, mode);
+    const s = t.objectStore(store);
+    const out = fn(s);
+    t.oncomplete = () => resolve(out?.result ?? out);
+    t.onerror = () => reject(t.error);
+  });
+}
+
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+
+/* ============ TAREAS ============ */
+export async function addTask(partial) {
+  const now = new Date().toISOString();
+
+  // Ignoramos cualquier id que venga en el partial; siempre generamos uno nuevo
+  const { id: _ignoredId, ...safePartial } = partial || {};
+
+  const task = {
+    id: uid(),
+    type: "personal", title: "", notes: "",
+    date: "", time: "", endTime: "", duration: 25,
+    projectId: null, tags: [], priority: 0,
+    done: false, doneAt: null,
+    createdAt: now, updatedAt: now, gcalEventId: null,
+    ...safePartial
+  };
+
+  // Sanear para IndexedDB
+  if (!task.id) task.id = uid();
+  if (task.date === null || task.date === undefined) task.date = "";
+  if (typeof task.date !== "string") task.date = String(task.date);
+  if (task.isChecklist === true) {
+    if (typeof task.type !== "string") task.type = "";
+  } else if (!task.type || typeof task.type !== "string") {
+    task.type = "personal";
+  }
+
+  await tx("tasks", "readwrite", s => s.put(task));
+  return task;
+}
+
+export async function updateTask(id, patch) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction("tasks", "readwrite");
+    const s = t.objectStore("tasks");
+    const req = s.get(id);
+    req.onsuccess = () => {
+      const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
+
+      // Sanear
+      if (merged.date === null || merged.date === undefined) merged.date = "";
+      if (typeof merged.date !== "string") merged.date = String(merged.date);
+      if (merged.isChecklist === true) {
+        if (typeof merged.type !== "string") merged.type = "";
+      } else if (!merged.type || typeof merged.type !== "string") {
+        merged.type = "personal";
+      }
+
+      s.put(merged);
+      t.oncomplete = () => resolve(merged);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function deleteTask(id) {
+  return tx("tasks", "readwrite", s => s.delete(id));
+}
+
+export async function getTasksByDate(dateStr) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const idx = db.transaction("tasks").objectStore("tasks").index("by_date");
+    const req = idx.getAll(IDBKeyRange.only(dateStr));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getTasksInRange(fromStr, toStr) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const idx = db.transaction("tasks").objectStore("tasks").index("by_date");
+    const req = idx.getAll(IDBKeyRange.bound(fromStr, toStr));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getAllTasks() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("tasks").objectStore("tasks").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getMedicalInRange(fromStr, toStr) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const idx = db.transaction("tasks").objectStore("tasks").index("by_date_type");
+    const req = idx.getAll(IDBKeyRange.bound([fromStr, "medical"], [toStr, "medical"]));
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getUpcomingMedical(limit = 5) {
+  const all = await getAllTasks();
+  const today = new Date().toISOString().slice(0, 10);
+  return all
+    .filter(t => t.type === "medical" && t.isChecklist !== true && !t.done && t.date && t.date >= today)
+    .sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")))
+    .slice(0, limit);
+}
+
+/* ============ AJUSTES ============ */
+export async function getSetting(key) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("settings").objectStore("settings").get(key);
+    req.onsuccess = () => resolve(req.result?.value ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function setSetting(key, value) {
+  await tx("settings", "readwrite", s => s.put({ key, value }));
+}
+
+/* ============ PROYECTOS ============ */
+export async function addProject(partial) {
+  const now = new Date().toISOString();
+  const project = {
+    id: uid(), name: "", color: "#C9A7E8", archived: false,
+    createdAt: now, ...partial
+  };
+  await tx("projects", "readwrite", s => s.put(project));
+  return project;
+}
+
+export async function getAllProjects() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("projects").objectStore("projects").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* ============ SESIONES DE TIEMPO ============ */
+export async function addSession(partial) {
+  const now = new Date().toISOString();
+  const session = {
+    id: uid(),
+    date: now.slice(0, 10),
+    startTime: "00:00",
+    endTime: "00:00",
+    durationMinutes: 0,
+    categoryId: "personal",
+    taskId: null,
+    taskTitle: null,
+    description: "",
+    billable: false,
+    rate: 0,
+    amount: 0,
+    billed: false,
+    billedAt: null,
+    adjustment: false,
+    createdAt: now,
+    ...partial
+  };
+  await tx("sessions", "readwrite", s => s.put(session));
+  return session;
+}
+
+export async function updateSession(id, patch) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction("sessions", "readwrite");
+    const s = t.objectStore("sessions");
+    const req = s.get(id);
+    req.onsuccess = () => {
+      const merged = { ...req.result, ...patch };
+      s.put(merged);
+      t.oncomplete = () => resolve(merged);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function deleteSession(id) {
+  return tx("sessions", "readwrite", s => s.delete(id));
+}
+
+export async function getAllSessions() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("sessions").objectStore("sessions").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getSessionsByCategory(categoryId) {
+  const all = await getAllSessions();
+  return all.filter(s => s.categoryId === categoryId);
+}
+
+/* ============ COBROS ============ */
+export async function addPayment(partial) {
+  const now = new Date().toISOString();
+  const payment = {
+    id: uid(),
+    date: now.slice(0, 10),
+    amount: 0,
+    categoryId: "work-sye",
+    method: "otro",
+    note: "",
+    appliedToSessions: [],
+    createdAt: now,
+    ...partial
+  };
+  await tx("payments", "readwrite", s => s.put(payment));
+  return payment;
+}
+
+export async function updatePayment(id, patch) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction("payments", "readwrite");
+    const s = t.objectStore("payments");
+    const req = s.get(id);
+    req.onsuccess = () => {
+      const merged = { ...req.result, ...patch };
+      s.put(merged);
+      t.oncomplete = () => resolve(merged);
+    };
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function deletePayment(id) {
+  return tx("payments", "readwrite", s => s.delete(id));
+}
+
+export async function getAllPayments() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("payments").objectStore("payments").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+
+/* ============ HÁBITOS Y CHECKLIST ============ */
+export async function addHabit(partial = {}) {
+  const now = new Date().toISOString();
+  const { id: _ignoredId, ...safe } = partial || {};
+  const habit = { id: uid(), title: "", notes: "", type: "personal", sourceTaskId: null, done: false, doneAt: null, active: true, createdAt: now, updatedAt: now, ...safe };
+  await tx("habits", "readwrite", s => s.add(habit));
+  return habit;
+}
+
+export async function getAllHabits() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("habits").objectStore("habits").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function updateHabit(id, patch) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction("habits", "readwrite");
+    const store = t.objectStore("habits");
+    const req = store.get(id);
+    req.onsuccess = () => {
+      if (!req.result) { reject(new Error(`No existe el hábito ${id}`)); return; }
+      const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
+      store.put(merged);
+      t.oncomplete = () => resolve(merged);
+    };
+    req.onerror = () => reject(req.error);
+    t.onerror = () => reject(t.error);
+  });
+}
+
+export async function deleteHabit(id) {
+  return tx("habits", "readwrite", s => s.delete(id));
+}
+
+/* Conversión idempotente: la comprobación y la escritura se realizan en una única
+   transacción de ambos almacenes, evitando duplicados por doble clic. */
+export async function convertTaskToHabit(taskId) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(["tasks", "habits"], "readwrite");
+    const tasks = t.objectStore("tasks");
+    const habits = t.objectStore("habits");
+    let result = null;
+    let failure = null;
+    const req = tasks.get(taskId);
+    req.onsuccess = () => {
+      const task = req.result;
+      if (!task) { failure = new Error(`No existe la tarea ${taskId}`); t.abort(); return; }
+      const allReq = habits.getAll();
+      allReq.onsuccess = () => {
+        const existing = allReq.result.find(h => h.id === task.habitId || h.sourceTaskId === task.id);
+        if (existing) {
+          if (task.habitId !== existing.id) tasks.put({ ...task, habitId: existing.id, updatedAt: new Date().toISOString() });
+          result = existing;
+          return;
+        }
+        const now = new Date().toISOString();
+        const habit = { id: uid(), title: task.title || "", notes: task.notes || "", type: task.type || "personal", sourceTaskId: task.id, done: false, doneAt: null, active: true, createdAt: now, updatedAt: now };
+        habits.add(habit);
+        tasks.put({ ...task, habitId: habit.id, updatedAt: now });
+        result = habit;
+      };
+      allReq.onerror = () => { failure = allReq.error; t.abort(); };
+    };
+    req.onerror = () => { failure = req.error; t.abort(); };
+    t.oncomplete = () => resolve(result);
+    t.onabort = () => reject(failure || t.error || new Error("No se pudo convertir la tarea en hábito"));
+    t.onerror = () => reject(failure || t.error);
+  });
+}
+
+/* Importación de respaldo por combinación, conservando IDs y enlaces. No borra datos existentes. */
+export async function mergeBackupData(data) {
+  const db = await initDB();
+  const storeNames = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings"];
+  const payload = {
+    tasks: Array.isArray(data.tasks) ? data.tasks : [],
+    habits: Array.isArray(data.habits) ? data.habits : [],
+    projects: Array.isArray(data.projects) ? data.projects : [],
+    notes: Array.isArray(data.notes) ? data.notes : [],
+    sessions: Array.isArray(data.sessions) ? data.sessions : [],
+    payments: Array.isArray(data.payments) ? data.payments : [],
+    settings: Array.isArray(data.settings) ? data.settings : []
+  };
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(storeNames, "readwrite");
+    let count = 0;
+    for (const name of storeNames) for (const item of payload[name]) {
+      if (!item || typeof item !== "object") continue;
+      if (name === "settings" ? typeof item.key !== "string" : (item.id == null || item.id === "")) continue;
+      t.objectStore(name).put(item); count++;
+    }
+    t.oncomplete = () => resolve(count);
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error("No se pudo restaurar el respaldo"));
+  });
+}
+
+export async function getAllSettings() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("settings").objectStore("settings").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getAllNotes() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("notes").objectStore("notes").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
