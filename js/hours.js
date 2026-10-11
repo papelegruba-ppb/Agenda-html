@@ -50,5 +50,4 @@ function notify() {
   listeners.forEach(fn => { try { fn(); } catch (_) {} });
 }
 
-// Notifica cada segundo para que se actualice el indicador
 setInterval(notify, 1000);
