@@ -1192,38 +1192,5 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 
 .checklist-list.past { margin-top: .25rem; }
 
-/* Checklist y Hábitos: complementos revisados para las variables reales del proyecto */
-.checklist-view,.habits-view{width:100%;min-width:0}
-.checklist-head,.habits-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.75rem}
-.checklist-head .view-title,.habits-head .view-title{margin:0}
-.checklist-intro{margin:.25rem 0 0;color:var(--c-ink-soft);font-size:.88rem}
-.checklist-toolbar{display:flex;align-items:center;gap:.45rem;flex-wrap:wrap;margin:.65rem 0 1rem}
-.checklist-toolbar button,.checklist-bulk button{border:1px solid var(--c-border);background:var(--c-surface);border-radius:999px;padding:.5rem .75rem;color:var(--c-ink);cursor:pointer}
-.checklist-count{margin-left:auto;color:var(--c-ink-soft);font-size:.82rem}
-.checklist-bulk{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:.65rem;margin-bottom:.8rem}
-.checklist-bulk span{font-size:.85rem;margin-right:auto}
-.checklist-group{margin:.6rem 0 .85rem;min-width:0}
-.checklist-group>h4{margin:.35rem 0 .45rem;font-size:.82rem;font-weight:650;color:var(--c-ink-soft)}
-.checklist-item{grid-template-columns:auto minmax(0,1fr) auto;min-width:0;border-left-color:var(--task-category,var(--c-personal));padding:.65rem .6rem;gap:.5rem}
-.checklist-item .task-body{min-width:0}
-.checklist-item .task-title{overflow-wrap:anywhere}
-.checklist-item .task-icon{position:static;width:auto;height:auto;max-width:100%;display:flex;align-items:center;justify-content:flex-end;gap:.1rem;flex-shrink:0}
-.checklist-item .task-icon .butterfly{width:22px;height:22px;flex:0 0 22px}
-.checklist-item .task-icon .task-delete{position:static;width:24px;height:28px;font-size:13px;opacity:.75}
-.icon-action{width:28px;height:28px;display:grid;place-items:center;border:0;background:transparent;color:var(--c-ink-mute);border-radius:7px;padding:4px;cursor:pointer;flex:0 0 auto}
-.icon-action svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
-.icon-action:hover,.icon-action:focus-visible{color:var(--c-ink);background:rgba(201,167,232,.18)}
-.task-select{accent-color:var(--c-lavender);flex:0 0 auto}
-.checklist-repeat-label{display:block;color:var(--c-ink-soft);font-size:.75rem;margin-top:.25rem}
-.repeat-modal>p{color:var(--c-ink-soft);margin-top:0}
-.repeat-option{display:flex;align-items:center;gap:.55rem;padding:.6rem .25rem;border-bottom:1px solid var(--c-border)}
-.repeat-option input,.repeat-days input{accent-color:var(--c-lavender)}
-.repeat-days{display:none;gap:.35rem;flex-wrap:wrap;padding:.75rem 0}
-.repeat-days label{display:flex;align-items:center;gap:.2rem;padding:.4rem;border:1px solid var(--c-border);border-radius:8px;background:var(--c-surface)}
-.bulk-category-label{display:grid;gap:.45rem}.bulk-category-label select{width:100%;padding:.65rem;border:1px solid var(--c-border);border-radius:9px;background:var(--c-surface)}
-.task-form-hint{padding:.6rem .75rem;border-radius:9px;background:rgba(201,167,232,.16);color:var(--c-ink-soft);font-size:.83rem;margin:.2rem 0 .7rem}
-.checklist-migration{padding:.75rem;border:1px solid var(--c-border);border-radius:12px;background:var(--c-surface)}.checklist-migration p{margin:0 0 .5rem;color:var(--c-ink-soft);font-size:.86rem}
-.habits-total{display:grid;place-items:center;min-width:2rem;height:2rem;padding:0 .5rem;background:rgba(201,167,232,.22);border-radius:999px;color:var(--c-ink);font-weight:650}
-.habits-list{list-style:none;margin:0;padding:0;display:grid;gap:.5rem}.habit-item{position:relative;display:flex;align-items:center;gap:.65rem;min-width:0;padding:.75rem;background:var(--c-surface);border:1px solid var(--c-border);border-left:3px solid var(--task-category,var(--c-personal));border-radius:12px}
-.habit-item.done{opacity:.8}.habit-item.done .habit-title{text-decoration:line-through}.habit-check{flex:0 0 24px;width:24px;height:24px;border:1.5px solid var(--task-category,var(--c-border));border-radius:50%;background:transparent;color:var(--c-ink);display:grid;place-items:center;padding:0;font-size:.8rem;cursor:pointer}.habit-check.is-checked{background:var(--task-category,var(--c-border))}.habit-body{flex:1;min-width:0}.habit-body small{display:block;color:var(--c-ink-soft);font-size:.79rem;margin-top:.2rem}.habit-body p{margin:.35rem 0 0;font-size:.85rem;white-space:pre-wrap;overflow-wrap:anywhere}.habit-item>.butterfly{width:24px;height:24px;display:inline-flex;flex-shrink:0}.habit-item>.butterfly svg{width:100%;height:100%}
-@media(max-width:540px){.checklist-head,.habits-head{align-items:flex-start}.checklist-toolbar{gap:.3rem}.checklist-toolbar button,.checklist-bulk button{font-size:.8rem;padding:.45rem .6rem}.checklist-count{width:100%;margin:.1rem 0 0}.checklist-item{gap:.35rem;padding:.6rem .4rem}.checklist-item .task-icon{gap:0}.checklist-item .task-icon .butterfly{width:18px;height:18px;flex-basis:18px}.icon-action{width:25px;height:27px;padding:3px}.checklist-item .task-icon .task-delete{width:20px;height:27px;padding:0}.checklist-item .task-title{font-size:.9rem}}
+/* Papelegruba updates: Photon autocomplete, compact checklist actions, habits and annual calendar */
+.checklist-actions{display:flex;align-items:center;gap:.4rem}.icon-action{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color,#e4dfea);border-radius:10px;background:transparent;color:inherit;font-size:1.25rem;cursor:pointer}.icon-action.active{background:#eee5fa;border-color:#b99ae8}.photon-suggestions{position:relative;z-index:20;display:flex;flex-direction:column;max-height:220px;overflow:auto;margin-top:4px;border:1px solid #ded7e7;border-radius:10px;background:#fff;box-shadow:0 8px 24px #24143a1a}.photon-suggestions[hidden]{display:none}.photon-suggestion{padding:.65rem .75rem;text-align:left;border:0;border-bottom:1px solid #f0edf3;background:#fff;color:#292530;cursor:pointer}.photon-suggestion:hover,.photon-suggestion:focus{background:#f5f0fb}.photon-empty{padding:.65rem;color:#6b6570;font-size:.9rem}.med-only label{position:relative}.year-head{display:flex;align-items:center;justify-content:center;gap:1rem;margin-bottom:1rem}.year-head h2{margin:0}.year-months{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.year-month{border:1px solid #e7e0eb;border-radius:12px;padding:.75rem;min-width:0}.year-month h3{text-transform:capitalize;margin:0 0 .5rem;font-size:1rem}.year-weekdays,.year-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}.year-weekdays{font-size:.7rem;color:#777;margin-bottom:.25rem}.year-day{font-size:.75rem;min-height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%}.year-day.is-today{outline:1px solid #9a7ac7;font-weight:700}.year-day.has-events{background:#eee5fa;color:#4f3574;font-weight:700}.habit-list{list-style:none;padding:0;display:grid;gap:.65rem}.habit-row{display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;border:1px solid #e7e0eb;border-radius:12px}.habit-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:.25rem}.habit-main small{color:#716a78}.habit-edit,.habit-delete{border:0;background:transparent;padding:.25rem .4rem;cursor:pointer;color:#6f6875}.habit-delete{font-size:1.2rem;line-height:1}.habit-delete:hover{color:#9e3446}.habits-head{display:flex;align-items:center;justify-content:space-between;gap:1rem}.habits-intro{color:#716a78}@media(max-width:700px){.year-months{grid-template-columns:repeat(2,minmax(0,1fr))}.year-month{padding:.5rem}.year-day{font-size:.68rem;min-height:19px}.checklist-actions{gap:.25rem}.icon-action{width:34px;height:34px}}@media(max-width:420px){.year-months{grid-template-columns:1fr 1fr}.year-head{gap:.5rem}.year-head h2{font-size:1.05rem}}
