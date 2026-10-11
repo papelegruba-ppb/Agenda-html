@@ -1,8 +1,13 @@
 import { CATEGORIES, DEFAULT_CATEGORY } from "../categories.js";
 
-export function renderCategoryPicker(selectedId = DEFAULT_CATEGORY) {
+export function renderCategoryPicker(selectedId = DEFAULT_CATEGORY, allowNone = false) {
   return `
     <div class="cat-picker" role="radiogroup" aria-label="Categoría">
+      ${allowNone ? `
+        <button type="button" class="cat-chip type-none" role="radio" aria-checked="${!selectedId}" data-cat="">
+          <span class="cat-dot" style="background:#B8B1A7"></span><span class="cat-label">Sin categoría</span>
+        </button>
+      ` : ""}
       ${CATEGORIES.map(c => `
         <button type="button"
                 class="cat-chip type-${c.id}"
