@@ -15,7 +15,7 @@ export async function renderMonth(root) {
   const fromStr = iso(firstCell);
   const toStr = iso(lastCell);
 
-  const tasks = await getTasksInRange(fromStr, toStr);
+  const tasks = (await getTasksInRange(fromStr, toStr)).filter(t => t.isChecklist !== true);
   const byDate = new Map();
   for (const t of tasks) {
     if (!byDate.has(t.date)) byDate.set(t.date, []);
