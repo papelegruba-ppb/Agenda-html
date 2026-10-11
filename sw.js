@@ -1,12 +1,11 @@
-const CACHE = "papelegruba-v1";
+const CACHE = "papelegruba-v2";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js", "./manifest.json",
-  "./js/db.js", "./js/dates.js", "./js/categories.js", "./js/google-colors.js", "./js/google.js",
+  "./js/db.js", "./js/dates.js", "./js/categories.js", "./js/google-colors.js", "./js/google.js", "./js/hours.js",
   "./js/views/year.js", "./js/views/month.js", "./js/views/week.js", "./js/views/day.js",
   "./js/views/checklist.js", "./js/views/timer.js", "./js/views/projects.js",
   "./js/views/habits.js", "./js/views/medical.js", "./js/views/settings.js",
-  "./js/ui/modal.js", "./js/ui/category-picker.js", "./js/ui/task-form.js", "./js/ui/project-form.js",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png"
+  "./js/ui/modal.js", "./js/ui/category-picker.js", "./js/ui/task-form.js", "./js/ui/project-form.js", "./js/ui/payment-form.js", "./js/ui/session-form.js", "./js/ui/butterfly.js",
 ];
 
 self.addEventListener("install", e => {
