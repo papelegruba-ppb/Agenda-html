@@ -78,6 +78,12 @@ function renderTaskItem(t) {
   const time = t.time ? `${t.time}${t.endTime ? "–" + t.endTime : ""}` : "";
   const subtitle = [t.specialty, t.doctor, t.center].filter(Boolean).join(" · ");
 
+  // Descripción: máximo 120 caracteres y solo si no es muy larga
+  const notes = (t.notes || "").trim();
+  const notesShort = notes.length > 120
+    ? notes.slice(0, 120).trim() + "…"
+    : notes;
+
   return `
     <li class="task-item ${t.done ? "done" : ""} type-${cat.id}" data-task-id="${t.id}">
       <button class="task-check" aria-label="Marcar"></button>
@@ -87,15 +93,23 @@ function renderTaskItem(t) {
           <span class="task-title">${escapeHtml(t.title)}</span>
         </div>
         ${subtitle ? `<small class="task-sub">${escapeHtml(subtitle)}</small>` : ""}
-        ${t.notes ? `<small class="task-notes">${escapeHtml(t.notes)}</small>` : ""}
+        ${notesShort ? `<small class="task-notes">${escapeHtml(notesShort)}</small>` : ""}
       </div>
       <span class="butterfly type-${cat.id}" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="16" height="16">
-          <path class="wing" d="M12 4 C10 8 6 8 4 10 C2 12 2 16 5 17 C8 18 11 15 12 12 C13 15 16 18 19 17 C22 16 22 12 20 10 C18 8 14 8 12 4 Z"/>
-        </svg>
+        ${butterflySvg()}
       </span>
       <button class="task-delete" aria-label="Borrar">✕</button>
     </li>
+  `;
+}
+
+/* Mariposa nueva: simétrica, se ve bien a cualquier tamaño */
+function butterflySvg() {
+  return `
+    <svg viewBox="0 0 24 24" width="16" height="16">
+      <path class="wing" d="M12 6 C9 2 3 2 2 7 C1 12 6 14 10 13 C7 15 4 19 8 21 C11 22 12 18 12 15 C12 18 13 22 16 21 C20 19 17 15 14 13 C18 14 23 12 22 7 C21 2 15 2 12 6 Z"/>
+      <line x1="12" y1="6" x2="12" y2="15" stroke="currentColor" stroke-width="1" opacity=".5"/>
+    </svg>
   `;
 }
 
