@@ -2,6 +2,7 @@ import { iso, isSameDay, addDays } from "../dates.js";
 import { getTasksByDate, updateTask, deleteTask } from "../db.js";
 import { openTaskForm } from "../ui/task-form.js";
 import { getCategory } from "../categories.js";
+import { butterflySvg } from "../ui/butterfly.js";
 
 let cursor = new Date();
 
@@ -53,11 +54,11 @@ export async function renderDay(root) {
   root.querySelectorAll(".task-item").forEach(li => {
     const id = li.dataset.taskId;
 
-    li.querySelector(".task-check").onclick = async (e) => {
+    li.querySelector(".task-check")?.addEventListener("click", async (e) => {
       e.stopPropagation();
       const done = li.classList.toggle("done");
       await updateTask(id, { done, doneAt: done ? new Date().toISOString() : null });
-    };
+    });
 
     li.onclick = async () => {
       const task = tasks.find(t => t.id === id);
@@ -78,7 +79,7 @@ function renderTaskItem(t) {
   const time = t.time ? `${t.time}${t.endTime ? "–" + t.endTime : ""}` : "";
   const subtitle = [t.specialty, t.doctor, t.center].filter(Boolean).join(" · ");
 
-  // Descripción: máximo 120 caracteres y solo si no es muy larga
+  // Descripción: máximo 120 caracteres
   const notes = (t.notes || "").trim();
   const notesShort = notes.length > 120
     ? notes.slice(0, 120).trim() + "…"
@@ -86,30 +87,17 @@ function renderTaskItem(t) {
 
   return `
     <li class="task-item ${t.done ? "done" : ""} type-${cat.id}" data-task-id="${t.id}">
-      <button class="task-check" aria-label="Marcar"></button>
+      <span class="task-time">${time}</span>
       <div class="task-body">
         <div class="task-line">
-          ${time ? `<time>${time}</time>` : ""}
           <span class="task-title">${escapeHtml(t.title)}</span>
         </div>
         ${subtitle ? `<small class="task-sub">${escapeHtml(subtitle)}</small>` : ""}
         ${notesShort ? `<small class="task-notes">${escapeHtml(notesShort)}</small>` : ""}
       </div>
-      <span class="butterfly type-${cat.id}" aria-hidden="true">
-        ${butterflySvg()}
-      </span>
+      <span class="butterfly type-${cat.id}" aria-hidden="true">${butterflySvg()}</span>
       <button class="task-delete" aria-label="Borrar">✕</button>
     </li>
-  `;
-}
-
-/* Mariposa nueva: simétrica, se ve bien a cualquier tamaño */
-function butterflySvg() {
-  return `
-    <svg viewBox="0 0 24 24" width="16" height="16">
-      <path class="wing" d="M12 6 C9 2 3 2 2 7 C1 12 6 14 10 13 C7 15 4 19 8 21 C11 22 12 18 12 15 C12 18 13 22 16 21 C20 19 17 15 14 13 C18 14 23 12 22 7 C21 2 15 2 12 6 Z"/>
-      <line x1="12" y1="6" x2="12" y2="15" stroke="currentColor" stroke-width="1" opacity=".5"/>
-    </svg>
   `;
 }
 
