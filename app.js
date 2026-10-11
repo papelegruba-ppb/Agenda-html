@@ -9,6 +9,7 @@ import { renderProjects } from "./js/views/projects.js";
 import { renderHabits } from "./js/views/habits.js";
 import { renderSettings } from "./js/views/settings.js";
 import { renderMedical } from "./js/views/medical.js";
+import { getActiveTimer, getElapsedMs, formatElapsed, onChange } from "./js/hours.js";
 
 const views = {
   year: renderYear,
@@ -26,8 +27,10 @@ const views = {
 const root = document.getElementById("view-root");
 const buttons = document.querySelectorAll("[data-view]");
 
+let currentView = "day";
+
 async function navigate(view) {
-  // Marcar el botón activo (aria-current="page" en el que corresponde)
+  currentView = view;
   buttons.forEach(b => {
     if (b.dataset.view === view) {
       b.setAttribute("aria-current", "page");
@@ -35,22 +38,19 @@ async function navigate(view) {
       b.removeAttribute("aria-current");
     }
   });
-
-  // Renderizar la vista
   root.innerHTML = "";
   if (views[view]) {
     await views[view](root);
   } else {
     root.innerHTML = `<h2 class="view-title">${view}</h2><p class="empty">Vista en construcción.</p>`;
   }
+  updateFloatingBadge();
 }
 
-// Enganchar todos los botones con data-view
 buttons.forEach(b => {
   b.addEventListener("click", () => navigate(b.dataset.view));
 });
 
-// Navegación desde otras vistas (por ejemplo, al pulsar un día del calendario)
 document.addEventListener("navigate-day", e => {
   if (e.detail && e.detail.date) {
     setDayCursor(e.detail.date);
@@ -58,7 +58,36 @@ document.addEventListener("navigate-day", e => {
   }
 });
 
-// Arranque
+/* ============ Indicador flotante del cronómetro ============ */
+function ensureBadge() {
+  let badge = document.getElementById("timerBadge");
+  if (!badge) {
+    badge = document.createElement("div");
+    badge.id = "timerBadge";
+    badge.className = "timer-badge";
+    badge.style.display = "none";
+    badge.innerHTML = `<span class="pulse"></span><span class="badge-time">00:00:00</span><span class="badge-title"></span>`;
+    badge.onclick = () => navigate("timer");
+    document.body.appendChild(badge);
+  }
+  return badge;
+}
+
+function updateFloatingBadge() {
+  const badge = ensureBadge();
+  const t = getActiveTimer();
+  if (!t) {
+    badge.style.display = "none";
+    return;
+  }
+  badge.style.display = "flex";
+  badge.querySelector(".badge-time").textContent = formatElapsed(getElapsedMs());
+  badge.querySelector(".badge-title").textContent = t.taskTitle ? "· " + t.taskTitle : "";
+}
+
+onChange(updateFloatingBadge);
+
+/* ============ Arranque ============ */
 (async () => {
   try {
     await initDB();
@@ -66,6 +95,7 @@ document.addEventListener("navigate-day", e => {
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
+    updateFloatingBadge();
   } catch (e) {
     console.error("Error al arrancar:", e);
     document.body.insertAdjacentHTML(
