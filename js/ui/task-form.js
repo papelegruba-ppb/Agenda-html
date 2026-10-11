@@ -30,7 +30,7 @@ const MEDICAL_FIELDS = `
     </label>
     <label>Dirección
       <div style="display:flex; gap:.4rem; align-items:center;">
-        <input name="address" placeholder="Calle, número, ciudad" style="flex:1;">
+        <input name="address" placeholder="Empieza a escribir el lugar o la ciudad…" style="flex:1;" autocomplete="off" aria-autocomplete="list" aria-expanded="false"><div class="photon-suggestions" role="listbox" hidden></div>
         <button type="button" class="btn-maps" title="Buscar en Google Maps">🗺️</button>
       </div>
     </label>
@@ -50,7 +50,6 @@ const MEDICAL_FIELDS = `
 
 export function openTaskForm(task = null, onSaved) {
   const isEdit = !!(task && task.id);
-  const isChecklist = task?.isChecklist === true;
   const today = iso(new Date());
   const t = task || {
     title: "", notes: "", date: today, time: "", endTime: "",
@@ -68,14 +67,12 @@ export function openTaskForm(task = null, onSaved) {
 
       <div class="fld-row">
         <label>Fecha
-          <input name="date" type="date" value="${t.date || (isChecklist ? "" : today)}">
+          <input name="date" type="date" value="${t.date || today}">
         </label>
         <label>Hora
           <input name="time" type="time" value="${t.time || ""}">
         </label>
       </div>
-
-      ${isChecklist ? `<p class="task-form-hint">La fecha es solo un recordatorio del Checklist; no crea un evento ni una cita médica.</p>` : ""}
 
       <div class="fld-row med-only-hidden">
         <label>Hora fin
@@ -88,7 +85,7 @@ export function openTaskForm(task = null, onSaved) {
 
       <div class="fld-block">
         <span class="fld-label">Categoría</span>
-        ${renderCategoryPicker(t.type || (isChecklist ? "" : "personal"), isChecklist)}
+        ${renderCategoryPicker(t.type)}
       </div>
 
       <label>Notas
@@ -164,7 +161,7 @@ export function openTaskForm(task = null, onSaved) {
     if (medRow) medRow.style.display = catId === "medical" ? "" : "none";
   });
 
-  const initialCat = t.type || (isChecklist ? "" : "personal");
+  const initialCat = t.type || "personal";
   const medOnly = bodyEl.querySelector(".med-only");
   const medRow = bodyEl.querySelector(".med-only-hidden");
   if (medOnly) medOnly.style.display = initialCat === "medical" ? "" : "none";
@@ -176,6 +173,50 @@ export function openTaskForm(task = null, onSaved) {
   if (t.address)   bodyEl.querySelector('[name="address"]').value = t.address;
   if (t.phone)     bodyEl.querySelector('[name="phone"]').value = t.phone;
   if (t.reminderMinutes) bodyEl.querySelector('[name="reminderMinutes"]').value = String(t.reminderMinutes);
+
+  // Autocompletado de direcciones con Photon (OpenStreetMap). Consulta solo tras 3 caracteres y espera a que el usuario deje de escribir.
+  const addressInput = bodyEl.querySelector('[name="address"]');
+  const suggestions = bodyEl.querySelector('.photon-suggestions');
+  let photonTimer = null;
+  let photonController = null;
+  let photonRequest = 0;
+  const hideSuggestions = () => { if (suggestions) { suggestions.hidden = true; suggestions.innerHTML = ''; } addressInput?.setAttribute('aria-expanded', 'false'); };
+  if (addressInput && suggestions) {
+    addressInput.addEventListener('input', () => {
+      clearTimeout(photonTimer);
+      if (photonController) photonController.abort();
+      const query = addressInput.value.trim();
+      if (query.length < 3) { hideSuggestions(); return; }
+      photonTimer = setTimeout(async () => {
+        const requestId = ++photonRequest;
+        photonController = new AbortController();
+        try {
+          const url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(query) + '&limit=5&lang=es';
+          const response = await fetch(url, { signal: photonController.signal, headers: { 'Accept': 'application/json' } });
+          if (!response.ok) throw new Error('Photon no disponible');
+          const result = await response.json();
+          if (requestId !== photonRequest || document.activeElement !== addressInput) return;
+          const features = (result.features || []).filter(f => f.properties);
+          suggestions.innerHTML = '';
+          features.forEach(feature => {
+            const p = feature.properties;
+            const label = [p.name, p.street && p.housenumber ? `${p.street} ${p.housenumber}` : p.street, p.postcode, p.city || p.town || p.village, p.state, p.country].filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ');
+            if (!label) return;
+            const button = document.createElement('button');
+            button.type = 'button'; button.className = 'photon-suggestion'; button.setAttribute('role','option'); button.textContent = label;
+            button.addEventListener('click', () => { addressInput.value = label; hideSuggestions(); addressInput.dispatchEvent(new Event('change', { bubbles: true })); });
+            suggestions.appendChild(button);
+          });
+          if (!suggestions.children.length) {
+            const empty = document.createElement('div'); empty.className = 'photon-empty'; empty.textContent = 'No se encontraron sugerencias'; suggestions.appendChild(empty);
+          }
+          suggestions.hidden = false; addressInput.setAttribute('aria-expanded', 'true');
+        } catch (error) { if (error.name !== 'AbortError') hideSuggestions(); }
+      }, 350);
+    });
+    addressInput.addEventListener('keydown', e => { if (e.key === 'Escape') hideSuggestions(); });
+    document.addEventListener('click', e => { if (!suggestions.contains(e.target) && e.target !== addressInput) hideSuggestions(); }, { once: false });
+  }
 
   bodyEl.querySelector(".btn-maps")?.addEventListener("click", () => {
     const dir = bodyEl.querySelector('[name="address"]').value.trim();
@@ -190,19 +231,17 @@ export function openTaskForm(task = null, onSaved) {
 function readTaskForm(root) {
   const form = root.querySelector("form");
   const fd = new FormData(form);
-  const selectedChip = root.querySelector('.cat-chip[aria-checked="true"]');
-  const cat = selectedChip ? selectedChip.dataset.cat : "personal";
+  const cat = root.querySelector('.cat-chip[aria-checked="true"]')?.dataset.cat || "personal";
   const data = {
     title: (fd.get("title") || "").toString().trim(),
     notes: (fd.get("notes") || "").toString(),
-    date: (fd.get("date") || "").toString(),
+    date: fd.get("date") || null,
     time: fd.get("time") || null,
     endTime: fd.get("endTime") || null,
     duration: Number(fd.get("duration")) || 25,
     type: cat,
     priority: 0
   };
-  if (root.querySelector(".task-form-hint")) data.isChecklist = true;
   if (cat === "medical") {
     data.specialty = fd.get("specialty") || null;
     data.doctor = fd.get("doctor") || null;
