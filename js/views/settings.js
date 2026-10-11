@@ -50,11 +50,12 @@ export async function renderSettings(root) {
 
       <section class="settings-block">
         <h3>Datos locales</h3>
-        <p class="hint">Tienes ${count} tareas guardadas en este dispositivo.</p>
+        <p class="hint">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
         <div class="gcal-actions">
           <button class="btn-ghost" id="btnExport">Exportar JSON</button>
           <button class="btn-ghost" id="btnImport">Importar JSON</button>
         </div>
+        <p class="hint small" id="localMsg"></p>
       </section>
 
       <section class="settings-block">
@@ -73,6 +74,7 @@ export async function renderSettings(root) {
   `;
 
   const msg = root.querySelector("#gcalMsg");
+  const localMsg = root.querySelector("#localMsg");
 
   /* Conectar */
   root.querySelector("#btnConnect")?.addEventListener("click", async () => {
@@ -114,16 +116,16 @@ export async function renderSettings(root) {
       msg.textContent = `Descargados ${events.length}. Guardando en Papelegruba…`;
 
       const { addTask } = await import("../db.js");
-      let count = 0;
+      let saved = 0;
       for (const ev of events) {
         const t = gcalEventToTask(ev);
         if (!t.date) continue;
         await addTask(t);
-        count++;
+        saved++;
       }
 
       await setSetting("lastSync", new Date().toLocaleString("es-ES"));
-      msg.textContent = `✅ Importados ${count} eventos. Ábrelos en Día, Semana o Mes.`;
+      msg.textContent = `✅ Importados ${saved} eventos. Ábrelos en Día, Semana o Mes.`;
 
       setTimeout(() => renderSettings(root), 1500);
     } catch (e) {
@@ -139,11 +141,16 @@ export async function renderSettings(root) {
     alert("Client ID guardado. Recarga la app para aplicarlo.");
   });
 
-  /* Exportar */
+  /* Exportar JSON */
   root.querySelector("#btnExport").onclick = async () => {
     const tasks = await getAllTasks();
+    const payload = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      tasks
+    };
     const blob = new Blob(
-      [JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), tasks }, null, 2)],
+      [JSON.stringify(payload, null, 2)],
       { type: "application/json" }
     );
     const url = URL.createObjectURL(blob);
@@ -159,18 +166,81 @@ export async function renderSettings(root) {
     const inp = document.createElement("input");
     inp.type = "file";
     inp.accept = "application/json";
+
     inp.onchange = async () => {
       const file = inp.files[0];
       if (!file) return;
-      const data = JSON.parse(await file.text());
-      if (!confirm(`¿Importar ${data.tasks?.length || 0} tareas?`)) return;
-      const { addTask } = await import("../db.js");
-      for (const t of (data.tasks || [])) {
-        await addTask({ ...t, id: undefined });
+
+      localMsg.textContent = "Leyendo archivo…";
+
+      let data;
+      try {
+        const text = await file.text();
+        data = JSON.parse(text);
+      } catch (e) {
+        localMsg.textContent = "❌ JSON inválido: " + (e.message || e);
+        return;
       }
-      alert("Importado.");
-      renderSettings(root);
+
+      const incoming = Array.isArray(data.tasks) ? data.tasks : [];
+      if (!incoming.length) {
+        localMsg.textContent = "⚠️ El archivo no contiene tareas.";
+        return;
+      }
+
+      if (!confirm(`¿Importar ${incoming.length} tareas?`)) {
+        localMsg.textContent = "";
+        return;
+      }
+
+      const { addTask } = await import("../db.js");
+      let ok = 0;
+      let fail = 0;
+
+      for (let i = 0; i < incoming.length; i++) {
+        const t = incoming[i];
+
+        // Ignoramos id original: addTask genera uno nuevo
+        // Ignoramos campos que puedan romper IndexedDB
+        const clean = {
+          type: t.type || "personal",
+          title: t.title || "",
+          notes: t.notes || "",
+          date: typeof t.date === "string" ? t.date : "",
+          time: t.time || "",
+          endTime: t.endTime || "",
+          duration: t.duration || 25,
+          projectId: t.projectId || null,
+          tags: Array.isArray(t.tags) ? t.tags : [],
+          priority: t.priority || 0,
+          done: !!t.done,
+          doneAt: t.doneAt || null,
+          specialty: t.specialty || null,
+          doctor: t.doctor || null,
+          center: t.center || null,
+          address: t.address || null,
+          phone: t.phone || null,
+          reminderMinutes: t.reminderMinutes ?? null,
+          gcalEventId: t.gcalEventId || null
+        };
+
+        try {
+          await addTask(clean);
+          ok++;
+        } catch (e) {
+          console.warn("Error importando tarea:", t, e);
+          fail++;
+        }
+
+        if (i % 20 === 0) {
+          localMsg.textContent = `Importando… ${i + 1} / ${incoming.length}`;
+        }
+      }
+
+      localMsg.textContent = `✅ Importadas ${ok} tareas${fail ? `, ${fail} con error` : ""}.`;
+      setTimeout(() => renderSettings(root), 1500);
     };
+
     inp.click();
   };
 }
