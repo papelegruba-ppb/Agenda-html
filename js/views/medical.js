@@ -2,7 +2,7 @@ import { getAllTasks } from "../db.js";
 import { openTaskForm } from "../ui/task-form.js";
 
 export async function renderMedical(root) {
-  const all = (await getAllTasks()).filter(t => t.type === "medical");
+  const all = (await getAllTasks()).filter(t => t.type === "medical" && t.isChecklist !== true);
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const upcoming = all
