@@ -1251,3 +1251,7 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 .project-actions { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.75rem; }
 .project-actions button { font-size:.8rem; }
 @media(max-width:420px) { .project-task { grid-template-columns:18px minmax(0,1fr); } .project-task small { grid-column:2; white-space:normal; } }
+
+
+/* Tareas editables dentro de Proyectos */
+.project-task-toggle,.project-task-edit{border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;padding:.15rem .25rem;text-align:left;min-width:0}.project-task-toggle{font-size:1rem;border-radius:6px}.project-task-toggle:focus-visible,.project-task-edit:focus-visible{outline:2px solid var(--c-lavender-dk);outline-offset:2px}.project-task-edit{display:flex;flex-direction:column;gap:.15rem;overflow-wrap:anywhere}.project-task-edit small{color:var(--c-ink-soft);font-size:.72rem}.project-task-edit:hover span{text-decoration:underline}
