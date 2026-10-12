@@ -1,3 +1,7 @@
+function emitTaskChange(action, task) {
+  try { window.dispatchEvent(new CustomEvent("papelegruba:task-change", { detail: { action, task } })); } catch (_) {}
+}
+
 const DB_NAME = "papelegruba";
 const DB_VERSION = 3;
 let dbPromise;
@@ -92,6 +96,7 @@ export async function addTask(partial) {
   }
 
   await tx("tasks", "readwrite", s => s.put(task));
+  emitTaskChange("upsert", task);
   return task;
 }
 
@@ -114,14 +119,18 @@ export async function updateTask(id, patch) {
       }
 
       s.put(merged);
-      t.oncomplete = () => resolve(merged);
+      t.oncomplete = () => { emitTaskChange("upsert", merged); resolve(merged); };
     };
     req.onerror = () => reject(req.error);
   });
 }
 
 export async function deleteTask(id) {
-  return tx("tasks", "readwrite", s => s.delete(id));
+  const all = await getAllTasks();
+  const existing = all.find(task => task.id === id);
+  const result = await tx("tasks", "readwrite", s => s.delete(id));
+  if (existing) emitTaskChange("delete", existing);
+  return result;
 }
 
 export async function getTasksByDate(dateStr) {
