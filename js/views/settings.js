@@ -146,7 +146,7 @@ export async function renderSettings(root) {
     const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes()]);
     const payload = {
       format: "papelegruba-backup",
-      version: 2,
+      version: 3,
       exportedAt: new Date().toISOString(),
       tasks, habits, projects, notes, sessions, payments, settings
     };
