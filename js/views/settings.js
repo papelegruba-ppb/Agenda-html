@@ -143,7 +143,7 @@ export async function renderSettings(root) {
 
   /* Exportar JSON */
   root.querySelector("#btnExport").onclick = async () => {
-    const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, healthEpisodes, medicationIntakes] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes()]);
+    const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes()]);
     const payload = {
       format: "papelegruba-backup",
       version: 3,
