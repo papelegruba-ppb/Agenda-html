@@ -173,6 +173,61 @@ export async function renderSettings(root) {
     URL.revokeObjectURL(url);
   };
 
+  /* Copia completa en Google Drive */
+  root.querySelector("#btnDriveBackup").onclick = async () => {
+    localMsg.textContent = "Conectando con Google Drive…";
+    try {
+      await initGoogle();
+      await requestToken();
+      const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes()]);
+      const payload = { format: "papelegruba-backup", version: 3, exportedAt: new Date().toISOString(), tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes };
+      const file = await uploadBackupToDrive(payload);
+      localMsg.textContent = "Copia guardada en Google Drive: " + (file.name || "Papelegruba");
+      await refreshDriveBackups();
+    } catch (e) { localMsg.textContent = "Error guardando en Drive: " + (e.message || e); }
+  };
+
+  root.querySelector("#btnDriveList").onclick = refreshDriveBackups;
+
+  async function refreshDriveBackups() {
+    localMsg.textContent = "Buscando copias en Drive…";
+    try {
+      await initGoogle();
+      await requestToken();
+      const files = await listBackupsOnDrive();
+      const select = root.querySelector("#driveBackupSelect");
+      select.innerHTML = "";
+      const first = document.createElement("option");
+      first.value = ""; first.textContent = files.length ? "Selecciona una copia…" : "No hay copias de Papelegruba en Drive";
+      select.appendChild(first);
+      files.forEach(file => {
+        const option = document.createElement("option");
+        option.value = file.id;
+        option.textContent = (file.name || "Backup") + (file.createdTime ? " · " + new Date(file.createdTime).toLocaleString("es-ES") : "");
+        select.appendChild(option);
+      });
+      localMsg.textContent = files.length ? "Encontradas " + files.length + " copias." : "No hay copias guardadas por Papelegruba en Drive.";
+    } catch (e) { localMsg.textContent = "Error buscando copias: " + (e.message || e); }
+  }
+
+  root.querySelector("#btnDriveRestore").onclick = async () => {
+    const fileId = root.querySelector("#driveBackupSelect").value;
+    if (!fileId) { localMsg.textContent = "Selecciona primero una copia de Drive."; return; }
+    if (!confirm("Se combinará la copia con los datos de este dispositivo. Los registros con la misma ID se actualizarán y no se borrarán datos. ¿Continuar?")) return;
+    localMsg.textContent = "Descargando copia de Drive…";
+    try {
+      await initGoogle();
+      await requestToken();
+      const raw = await downloadBackupFromDrive(fileId);
+      const data = JSON.parse(raw);
+      if (data.format !== "papelegruba-backup") throw new Error("El archivo no es una copia de Papelegruba.");
+      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes"];
+      const total = collections.reduce((sum, key) => sum + (Array.isArray(data[key]) ? data[key].length : 0), 0);
+      if (!total) throw new Error("La copia no contiene datos reconocibles.");
+      const count = await mergeBackupData(data);
+      localMsg.textContent = "Restauración completada: " + count + " registros procesados. No se han borrado datos.";
+    } catch (e) { localMsg.textContent = "Error restaurando desde Drive: " + (e.message || e); }
+  };
   /* Importar JSON */
   root.querySelector("#btnImport").onclick = () => {
     const inp = document.createElement("input");
