@@ -267,7 +267,7 @@ export function installGoogleSyncListeners() {
       try {
         if (isConnected()) {
           if (task.gtaskId) await deleteGoogleTask(task.gtaskId);
-          if (task.gcalEventId) await deleteCalendarEvent(task.gcalEventId);
+          if (task.gcalEventId && !isChecklist(task)) await deleteCalendarEvent(task.gcalEventId);
         } else {
           await queueDeletion(task);
         }
