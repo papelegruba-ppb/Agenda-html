@@ -148,7 +148,7 @@ export async function renderSettings(root) {
       format: "papelegruba-backup",
       version: 3,
       exportedAt: new Date().toISOString(),
-      tasks, habits, projects, notes, sessions, payments, settings
+      tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes
     };
     const blob = new Blob(
       [JSON.stringify(payload, null, 2)],
