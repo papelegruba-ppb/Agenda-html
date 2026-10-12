@@ -1,4 +1,4 @@
-name: Validar JavaScript
+name: Validar JavaScript y datos
 
 on:
   push:
@@ -7,13 +7,16 @@ on:
     branches: ["main"]
 
 jobs:
-  syntax:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Comprobar sintaxis de JavaScript
-        run: |
-          find . -name '*.js' -not -path './.git/*' -print0 | xargs -0 -n1 node --check
+      - name: Instalar dependencias de pruebas
+        run: npm install --no-audit --no-fund
+      - name: Comprobar sintaxis
+        run: npm run check
+      - name: Probar migración, salud, hábitos y backup
+        run: npm test
