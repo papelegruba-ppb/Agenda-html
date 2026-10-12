@@ -1,4 +1,4 @@
-import { getAllProjects, getAllTasks, addProject, initDB } from "../db.js";
+import { getAllProjects, getAllTasks, addProject, initDB, updateTask } from "../db.js";
 import { openProjectForm } from "../ui/project-form.js";
 import { openTaskForm } from "../ui/task-form.js";
 
@@ -36,9 +36,9 @@ export async function renderProjects(root) {
                 <div class="project-progress" aria-label="Progreso del proyecto"><span style="width:${progress}%;background:${safeColor(p.color)}"></span></div>
                 <div class="project-tasks">
                   ${linked.length ? linked.slice().sort((a,b) => (a.date || "").localeCompare(b.date || "")).slice(0,5).map(t => `
-                    <div class="project-task ${t.done ? "done" : ""}">
-                      <span>${t.done ? "✓" : "○"}</span>
-                      <span>${esc(t.title || "Sin título")}</span>
+                    <div class="project-task ${t.done ? "done" : ""}" data-task-id="${esc(t.id)}">
+                      <button type="button" class="project-task-toggle" data-task-id="${esc(t.id)}" aria-label="${t.done ? "Marcar pendiente" : "Marcar completada"}">${t.done ? "✓" : "○"}</button>
+                      <button type="button" class="project-task-edit" data-task-id="${esc(t.id)}" title="Editar tarea">${esc(t.title || "Sin título")}</button>
                       <small>${t.date ? esc(t.date) : (t.isChecklist ? "Checklist" : "Sin fecha")}</small>
                     </div>`).join("") : '<p class="hint small">Todavía no hay tareas asignadas a este proyecto.</p>'}
                   ${linked.length > 5 ? `<p class="hint small">Y ${linked.length - 5} tareas más…</p>` : ""}
@@ -64,7 +64,21 @@ export async function renderProjects(root) {
         await updateProject(p.id, { name: name.trim() });
         await draw();
       };
-      card.querySelector(".project-add-task").onclick = () => openTaskForm({ projectId: p.id }, draw);
+      card.querySelector(".project-add-task").onclick = () => openTaskForm({ projectId: p.id, date: "", time: "", type: "personal", isChecklist: true }, draw);
+      card.querySelectorAll(".project-task-edit").forEach(button => {
+        button.onclick = async () => {
+          const task = tasks.find(item => item.id === button.dataset.taskId);
+          if (task) await openTaskForm(task, draw);
+        };
+      });
+      card.querySelectorAll(".project-task-toggle").forEach(button => {
+        button.onclick = async () => {
+          const task = tasks.find(item => item.id === button.dataset.taskId);
+          if (!task) return;
+          await updateTask(task.id, { done: !task.done, doneAt: !task.done ? new Date().toISOString() : null });
+          await draw();
+        };
+      });
       card.querySelector(".project-archive").onclick = async () => {
         await updateProject(p.id, { archived: !p.archived });
         await draw();
