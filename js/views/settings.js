@@ -1,4 +1,4 @@
-import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes } from "../db.js";
+import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes, updateTask, deleteTask } from "../db.js";
 import { GOOGLE_CLIENT_ID } from "../../config.js";
 import {
   initGoogle,
@@ -42,12 +42,14 @@ export async function renderSettings(root) {
           ${connected
             ? `
               <button class="btn-primary" id="btnImportGCAL">Importar desde Google Calendar</button>
+              <button class="btn-ghost" id="btnFindDuplicates">Revisar duplicados importados</button>
               <button class="btn-ghost" id="btnDisconnect">Desconectar</button>
             `
             : `<button class="btn-primary" id="btnConnect">Conectar con Google</button>`}
         </div>
 
         <p class="hint small" id="gcalMsg"></p>
+        <div id="duplicateReview" class="duplicate-review"></div>
         ${lastSync ? `<p class="hint small">Última sincronización: ${escapeHtml(lastSync)}</p>` : ""}
       </section>
 
@@ -110,8 +112,7 @@ export async function renderSettings(root) {
   root.querySelector("#btnImportGCAL")?.addEventListener("click", async () => {
     if (!confirm(
       "Se van a importar TODOS los eventos de tu calendario de Google desde 2025 hasta hoy.\n\n" +
-      "Los eventos se convertirán en tareas de Papelegruba y se guardarán en este dispositivo.\n\n" +
-      "Si ya has importado antes, se crearán duplicados.\n\n" +
+      "Los eventos se convertirán en tareas de Papelegruba. Los ya importados se actualizarán en lugar de duplicarse.\n\n" +
       "¿Continuar?"
     )) return;
 
@@ -126,17 +127,32 @@ export async function renderSettings(root) {
 
       msg.textContent = `Descargados ${events.length}. Guardando en Papelegruba…`;
 
-      const { addTask } = await import("../db.js");
-      let saved = 0;
+      const { addTask, getAllTasks } = await import("../db.js");
+      const existingTasks = await getAllTasks();
+      const byGoogleId = new Map();
+      for (const task of existingTasks) {
+        if (task.gcalEventId && !byGoogleId.has(task.gcalEventId)) byGoogleId.set(task.gcalEventId, task);
+      }
+      let created = 0;
+      let updated = 0;
+      let skipped = 0;
       for (const ev of events) {
-        const t = gcalEventToTask(ev);
-        if (!t.date) continue;
-        await addTask(t);
-        saved++;
+        const task = gcalEventToTask(ev);
+        if (!task.date || !ev.id) { skipped++; continue; }
+        const existing = byGoogleId.get(ev.id);
+        if (existing) {
+          const { id: keepId, ...patch } = task;
+          await updateTask(existing.id, { ...patch, gcalEventId: ev.id, done: existing.done, doneAt: existing.doneAt, projectId: existing.projectId, createdAt: existing.createdAt });
+          updated++;
+        } else {
+          const added = await addTask(task);
+          byGoogleId.set(ev.id, added);
+          created++;
+        }
       }
 
       await setSetting("lastSync", new Date().toLocaleString("es-ES"));
-      msg.textContent = `✅ Importados ${saved} eventos. Ábrelos en Día, Semana o Mes.`;
+      msg.textContent = `Importación terminada: ${created} nuevos, ${updated} actualizados y ${skipped} omitidos. No se han creado copias nuevas de eventos ya importados.`;
 
       setTimeout(() => renderSettings(root), 1500);
     } catch (e) {
@@ -144,6 +160,35 @@ export async function renderSettings(root) {
     }
   });
 
+  /* Revisar y eliminar duplicados importados, uno por uno */
+  root.querySelector("#btnFindDuplicates")?.addEventListener("click", async () => {
+    const panel = root.querySelector("#duplicateReview");
+    panel.innerHTML = "Buscando duplicados…";
+    try {
+      const tasks = (await getAllTasks()).filter(t => t.gcalEventId && !t.isChecklist);
+      const groups = new Map();
+      for (const task of tasks) {
+        if (!groups.has(task.gcalEventId)) groups.set(task.gcalEventId, []);
+        groups.get(task.gcalEventId).push(task);
+      }
+      const duplicates = [...groups.values()].filter(group => group.length > 1).flatMap(group => group.slice(1));
+      if (!duplicates.length) { panel.innerHTML = '<p class="hint small">No se han encontrado duplicados con el mismo identificador de Google Calendar.</p>'; return; }
+      panel.innerHTML = '<h4>Duplicados detectados: ' + duplicates.length + '</h4><p class="hint small">Elige qué copia adicional eliminar. Cada elemento se elimina por separado.</p><div class="duplicate-list">' + duplicates.map(t => '<article class="duplicate-item" data-task-id="' + escapeAttr(t.id) + '" style="display:flex;justify-content:space-between;gap:.75rem;align-items:center;padding:.6rem 0;border-bottom:1px solid var(--c-border)"><div><strong>' + escapeHtml(t.title || "Evento sin título") + '</strong><small style="display:block">' + escapeHtml(t.date || "Sin fecha") + (t.time ? " · " + escapeHtml(t.time) : "") + '</small></div><button class="btn-ghost duplicate-delete" type="button">Eliminar esta copia</button></article>').join("") + '</div>';
+      panel.querySelectorAll(".duplicate-delete").forEach(button => {
+        button.addEventListener("click", async () => {
+          const item = button.closest(".duplicate-item");
+          const task = duplicates.find(t => t.id === item.dataset.taskId);
+          if (!task || !confirm('¿Eliminar solo esta copia de "' + (task.title || "evento") + '" del dispositivo? No se borrará el evento de Google Calendar.')) return;
+          await deleteTask(task.id);
+          item.remove();
+          const heading = panel.querySelector("h4");
+          const remaining = panel.querySelectorAll(".duplicate-item").length;
+          if (heading) heading.textContent = "Duplicados pendientes: " + remaining;
+          if (!remaining) panel.innerHTML = '<p class="hint small">Revisión terminada. No quedan copias adicionales en esta lista.</p>';
+        });
+      });
+    } catch (e) { panel.textContent = "No se pudieron revisar los duplicados: " + (e.message || e); }
+  });
   /* Guardar Client ID */
   root.querySelector("#saveClientId").addEventListener("click", async () => {
     const v = root.querySelector("#clientId").value.trim();
