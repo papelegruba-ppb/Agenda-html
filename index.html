@@ -29,7 +29,11 @@
         </svg>
       </button>
 
-      <button type="button" data-view="health" aria-label="Control de salud" title="Control de salud">\n        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>\n      </button>\n\n      <button type="button" data-view="medical" aria-label="Citas" title="Citas">
+      <button type="button" data-view="health" aria-label="Control de salud" title="Control de salud">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2.5-6 4 12 2.5-6H21"/></svg>
+      </button>
+
+      <button type="button" data-view="medical" aria-label="Citas" title="Citas">
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="4" y="6" width="16" height="15" rx="3"/>
           <path d="M8 3v6M16 3v6M4 11h16M12 13v5M9.5 15.5h5"/>
@@ -76,7 +80,8 @@
   window.addEventListener("error", (e) => {
     const d = document.createElement("pre");
     d.style.cssText = "position:fixed;top:0;left:0;right:0;background:#DC2127;color:#fff;padding:10px;font-size:12px;z-index:9999;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;";
-    d.textContent = "ERROR: " + (e.message || e.error) + "\n" + (e.filename || "") + ":" + (e.lineno || "");
+    d.textContent = "ERROR: " + (e.message || e.error) + "
+" + (e.filename || "") + ":" + (e.lineno || "");
     document.body.appendChild(d);
   });
   window.addEventListener("unhandledrejection", (e) => {
@@ -90,7 +95,9 @@
   import("./app.js").catch(err => {
     const d = document.createElement("pre");
     d.style.cssText = "position:fixed;top:0;left:0;right:0;background:#DC2127;color:#fff;padding:10px;font-size:12px;z-index:9999;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;";
-    d.textContent = "ERROR AL CARGAR app.js:\n\n" + (err.stack || err.message || err);
+    d.textContent = "ERROR AL CARGAR app.js:
+
+" + (err.stack || err.message || err);
     document.body.appendChild(d);
   });
 </script>
