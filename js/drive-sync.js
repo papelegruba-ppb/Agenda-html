@@ -192,13 +192,16 @@ function planMerge(local, remote, base) {
 
 export async function previewDriveSync() {
   requireToken();
-  const [local, remoteState, base] = await Promise.all([
-    readLocal(), readRemote(), getSetting("driveSyncBase")
+  const [local, remoteState, accountEmail] = await Promise.all([
+    readLocal(), readRemote(), getSetting("driveSyncAccountEmail")
   ]);
+  if (!accountEmail) throw new Error("Elige primero una cuenta de Google para la sincronización.");
+  const base = await getSetting(`driveSyncBase:${accountEmail}`);
   const remote = remoteState.envelope?.collections || Object.fromEntries(COLLECTIONS.map(name => [name, []]));
   const result = planMerge(local, remote, base || null);
   return {
     ...result,
+    accountEmail,
     remoteStamp: remoteState.stamp,
     remoteExists: !!remoteState.envelope,
     remoteUpdatedAt: remoteState.envelope?.updatedAt || null,
@@ -237,6 +240,7 @@ async function uploadEnvelope(file, collections) {
 export async function applyDriveSync(plan) {
   requireToken();
   if (!plan || !plan.merged || !Array.isArray(plan.conflicts)) throw new Error("La vista previa ha caducado. Vuelve a sincronizar.");
+  if (!accountEmail || accountEmail !== plan.accountEmail) throw new Error("La cuenta de Google ha cambiado desde la vista previa. Analiza los cambios de nuevo.");
   if (plan.conflicts.length) throw new Error("Hay conflictos entre dispositivos. No se ha cambiado ningún dato; revisa y resuelve las diferencias antes de volver a sincronizar.");
   const latest = await readRemote();
   if (latest.stamp !== plan.remoteStamp) {
@@ -251,7 +255,7 @@ export async function applyDriveSync(plan) {
     ...plan.merged,
     settings
   });
-  await setSetting("driveSyncBase", plan.merged);
+  await setSetting(`driveSyncBase:${plan.accountEmail}`, plan.merged);
   await setSetting("driveSyncLastAt", new Date().toISOString());
   return { updatedAt: new Date().toISOString() };
 }
