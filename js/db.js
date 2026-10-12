@@ -133,6 +133,12 @@ export async function deleteTask(id) {
   return result;
 }
 
+// Eliminación estrictamente local para limpiar copias redundantes que comparten
+// el mismo ID remoto. No emite eventos de sincronización ni borra nada en Google.
+export async function deleteTaskLocalOnly(id) {
+  return tx("tasks", "readwrite", s => s.delete(id));
+}
+
 export async function getTasksByDate(dateStr) {
   const db = await initDB();
   return new Promise((resolve, reject) => {
