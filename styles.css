@@ -1223,3 +1223,5 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 .health-form .fld-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; }
 .health-section-head select { width:auto; max-width:100%; }
 @media(max-width:420px) { .health-stats { gap:.35rem; } .health-stats article { padding:.65rem; } .health-stats strong { font-size:1.25rem; } .health-form .fld-row { grid-template-columns:1fr; } .health-intake { flex-direction:column; } }
+
+.checklist-fields-hidden { display: none !important; }
