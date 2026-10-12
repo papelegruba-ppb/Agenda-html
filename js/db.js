@@ -1,5 +1,5 @@
 const DB_NAME = "papelegruba";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 let dbPromise;
 
 export function initDB() {
@@ -26,6 +26,8 @@ export function initDB() {
       mk("projects");
       mk("notes");
       mk("habits");
+      mk("healthEpisodes");
+      mk("medicationIntakes");
 
       if (!db.objectStoreNames.contains("sessions")) {
         const s = db.createObjectStore("sessions", { keyPath: "id" });
@@ -389,7 +391,7 @@ export async function convertTaskToHabit(taskId) {
 /* Importación de respaldo por combinación, conservando IDs y enlaces. No borra datos existentes. */
 export async function mergeBackupData(data) {
   const db = await initDB();
-  const storeNames = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings"];
+  const storeNames = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes"];
   const payload = {
     tasks: Array.isArray(data.tasks) ? data.tasks : [],
     habits: Array.isArray(data.habits) ? data.habits : [],
@@ -397,7 +399,9 @@ export async function mergeBackupData(data) {
     notes: Array.isArray(data.notes) ? data.notes : [],
     sessions: Array.isArray(data.sessions) ? data.sessions : [],
     payments: Array.isArray(data.payments) ? data.payments : [],
-    settings: Array.isArray(data.settings) ? data.settings : []
+    settings: Array.isArray(data.settings) ? data.settings : [],
+    healthEpisodes: Array.isArray(data.healthEpisodes) ? data.healthEpisodes : [],
+    medicationIntakes: Array.isArray(data.medicationIntakes) ? data.medicationIntakes : []
   };
   return new Promise((resolve, reject) => {
     const t = db.transaction(storeNames, "readwrite");
@@ -429,4 +433,87 @@ export async function getAllNotes() {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+
+
+/* ============ CONTROL DE SALUD ============ */
+export async function getAllHealthEpisodes() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("healthEpisodes").objectStore("healthEpisodes").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+export async function addHealthEpisode(partial = {}) {
+  const now = new Date().toISOString();
+  const episode = { id: uid(), type: "Otros", title: "", startAt: now.slice(0,16), endAt: "", intensity: null, symptoms: "", triggers: "", notes: "", createdAt: now, updatedAt: now, ...partial };
+  await tx("healthEpisodes", "readwrite", s => s.add(episode));
+  return episode;
+}
+export async function updateHealthEpisode(id, patch) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction("healthEpisodes", "readwrite");
+    const s = t.objectStore("healthEpisodes");
+    const req = s.get(id);
+    req.onsuccess = () => {
+      if (!req.result) { reject(new Error("No se encuentra el episodio")); return; }
+      const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
+      s.put(merged);
+      t.oncomplete = () => resolve(merged);
+    };
+    req.onerror = () => reject(req.error);
+    t.onerror = () => reject(t.error);
+  });
+}
+export async function deleteHealthEpisode(id) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(["healthEpisodes", "medicationIntakes"], "readwrite");
+    const episodes = t.objectStore("healthEpisodes");
+    const intakes = t.objectStore("medicationIntakes");
+    const req = intakes.getAll();
+    req.onsuccess = () => {
+      req.result.filter(x => x.episodeId === id).forEach(x => intakes.put({ ...x, episodeId: null, updatedAt: new Date().toISOString() }));
+      episodes.delete(id);
+    };
+    req.onerror = () => { try { t.abort(); } catch {} reject(req.error); };
+    t.oncomplete = () => resolve();
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error("No se pudo eliminar el episodio"));
+  });
+}
+export async function getAllMedicationIntakes() {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction("medicationIntakes").objectStore("medicationIntakes").getAll();
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+export async function addMedicationIntake(partial = {}) {
+  const now = new Date().toISOString();
+  const intake = { id: uid(), medication: "", dose: "", takenAt: now.slice(0,16), episodeId: null, effect: "", notes: "", createdAt: now, updatedAt: now, ...partial };
+  await tx("medicationIntakes", "readwrite", s => s.add(intake));
+  return intake;
+}
+export async function updateMedicationIntake(id, patch) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction("medicationIntakes", "readwrite");
+    const s = t.objectStore("medicationIntakes");
+    const req = s.get(id);
+    req.onsuccess = () => {
+      if (!req.result) { reject(new Error("No se encuentra la toma")); return; }
+      const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
+      s.put(merged);
+      t.oncomplete = () => resolve(merged);
+    };
+    req.onerror = () => reject(req.error);
+    t.onerror = () => reject(t.error);
+  });
+}
+export async function deleteMedicationIntake(id) {
+  return tx("medicationIntakes", "readwrite", s => s.delete(id));
 }

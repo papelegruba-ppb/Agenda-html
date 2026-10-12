@@ -1,10 +1,10 @@
-const CACHE = "papelegruba-v2";
+const CACHE = "papelegruba-v3";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js", "./manifest.json",
   "./js/db.js", "./js/dates.js", "./js/categories.js", "./js/google-colors.js", "./js/google.js",
   "./js/views/year.js", "./js/views/month.js", "./js/views/week.js", "./js/views/day.js",
   "./js/views/checklist.js", "./js/views/timer.js", "./js/views/projects.js",
-  "./js/views/habits.js", "./js/views/medical.js", "./js/views/settings.js",
+  "./js/views/habits.js", "./js/views/medical.js", "./js/views/health.js", "./js/views/settings.js",
   "./js/ui/modal.js", "./js/ui/category-picker.js", "./js/ui/task-form.js", "./js/ui/project-form.js",
 ];
 

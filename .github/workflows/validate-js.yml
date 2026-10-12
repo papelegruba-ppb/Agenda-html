@@ -1,0 +1,22 @@
+name: Validar JavaScript y datos
+
+on:
+  push:
+    branches: ["main", "feature/control-salud-backup-completo"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Instalar dependencias de pruebas
+        run: npm install --no-audit --no-fund
+      - name: Comprobar sintaxis
+        run: npm run check
+      - name: Probar migración, salud, hábitos y backup
+        run: npm test

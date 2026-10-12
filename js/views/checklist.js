@@ -1,12 +1,12 @@
-import { getAllTasks, addTask, updateTask, deleteTask } from "../db.js";
+import { getAllTasks, updateTask, deleteTask, convertTaskToHabit } from "../db.js";
 import { getCategory } from "../categories.js";
 import { openTaskForm } from "../ui/task-form.js";
 import { butterflySvg } from "../ui/butterfly.js";
-import { initDB } from "../db.js";
+
 
 export async function renderChecklist(root) {
   const all = await getAllTasks();
-  const items = all.filter(t => !t.date);
+  const items = all.filter(t => t.isChecklist === true || (!t.date && t.type !== "medical" && !t.gcalEventId));
   const pending = items.filter(t => !t.done);
   const done = items.filter(t => t.done);
 
@@ -38,7 +38,7 @@ export async function renderChecklist(root) {
   const refreshSelection = () => {
     root.querySelectorAll('.checklist-list .task-item').forEach(li => {
       let box = li.querySelector('.bulk-select');
-      if (selectionMode && !box) { box=document.createElement('input'); box.type='checkbox'; box.className='bulk-select'; box.setAttribute('aria-label','Seleccionar tarea'); li.prepend(box); }
+      if (selectionMode && !box) { box=document.createElement('input'); box.type='checkbox'; box.className='bulk-select'; box.setAttribute('aria-label','Seleccionar tarea'); box.addEventListener('click', e => e.stopPropagation()); li.prepend(box); }
       if (!selectionMode && box) box.remove();
     });
     selectButton?.classList.toggle('active', selectionMode);
@@ -50,14 +50,14 @@ export async function renderChecklist(root) {
     if(!selectionMode){const choice=confirm('¿Quieres trasladar TODAS las tareas pendientes a Hábitos? Pulsa Cancelar para elegir algunas.');if(choice) targets=pending;else{selectionMode=true;refreshSelection();alert('Marca las tareas que quieras trasladar y vuelve a pulsar la flecha.');return;}}
     if(!targets.length){alert('Selecciona al menos una tarea.');return;}
     if(!confirm(`¿Crear ${targets.length} hábito(s) a partir de las tareas seleccionadas? Las tareas originales se conservarán.`))return;
-    const db=await initDB(); await new Promise((resolve,reject)=>{const tx=db.transaction('habits','readwrite');const store=tx.objectStore('habits');targets.forEach(t=>store.put({id:crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random(),name:t.title,duration:Number(t.duration)||15,days:[0,1,2,3,4,5,6],frequencyLabel:'Todos los días',notes:t.notes||'',sourceTaskId:t.id,createdAt:new Date().toISOString()}));tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);}); alert('Hábitos creados. Las tareas originales siguen en Checklist.');
+    try { for (const task of targets) await convertTaskToHabit(task.id); alert("Hábitos creados o vinculados. Las tareas originales siguen en Checklist y el estado del hábito es independiente."); renderChecklist(root); } catch (error) { alert("No se pudieron crear los hábitos: " + (error.message || error)); }
   };
   refreshSelection();
 
   /* Botón nueva tarea (sin fecha) */
   root.querySelector("#newChecklist").onclick = () => {
     openTaskForm(
-      { date: null, type: "personal", title: "", notes: "" },
+      { date: "", type: "personal", title: "", notes: "", isChecklist: true },
       () => renderChecklist(root)
     );
   };
@@ -69,7 +69,7 @@ export async function renderChecklist(root) {
     if (!task) return;
 
     /* Check para marcar como hecha */
-    li.querySelector(".task-check")?.addEventListener("click", async (e) => {
+    li.querySelector(".task-check-round")?.addEventListener("click", async (e) => {
       e.stopPropagation();
       await updateTask(id, {
         done: !task.done,
@@ -88,7 +88,7 @@ export async function renderChecklist(root) {
 
     /* Abrir formulario */
     li.onclick = () => {
-      openTaskForm(task, () => renderChecklist(root));
+      openTaskForm({ ...task, isChecklist: true }, () => renderChecklist(root));
     };
   });
 }

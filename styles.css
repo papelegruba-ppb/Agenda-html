@@ -1194,3 +1194,34 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 
 /* Papelegruba updates: Photon autocomplete, compact checklist actions, habits and annual calendar */
 .checklist-actions{display:flex;align-items:center;gap:.4rem}.icon-action{width:38px;height:38px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border-color,#e4dfea);border-radius:10px;background:transparent;color:inherit;font-size:1.25rem;cursor:pointer}.icon-action.active{background:#eee5fa;border-color:#b99ae8}.photon-suggestions{position:relative;z-index:20;display:flex;flex-direction:column;max-height:220px;overflow:auto;margin-top:4px;border:1px solid #ded7e7;border-radius:10px;background:#fff;box-shadow:0 8px 24px #24143a1a}.photon-suggestions[hidden]{display:none}.photon-suggestion{padding:.65rem .75rem;text-align:left;border:0;border-bottom:1px solid #f0edf3;background:#fff;color:#292530;cursor:pointer}.photon-suggestion:hover,.photon-suggestion:focus{background:#f5f0fb}.photon-empty{padding:.65rem;color:#6b6570;font-size:.9rem}.med-only label{position:relative}.year-head{display:flex;align-items:center;justify-content:center;gap:1rem;margin-bottom:1rem}.year-head h2{margin:0}.year-months{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.year-month{border:1px solid #e7e0eb;border-radius:12px;padding:.75rem;min-width:0}.year-month h3{text-transform:capitalize;margin:0 0 .5rem;font-size:1rem}.year-weekdays,.year-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}.year-weekdays{font-size:.7rem;color:#777;margin-bottom:.25rem}.year-day{font-size:.75rem;min-height:22px;display:flex;align-items:center;justify-content:center;border-radius:50%}.year-day.is-today{outline:1px solid #9a7ac7;font-weight:700}.year-day.has-events{background:#eee5fa;color:#4f3574;font-weight:700}.habit-list{list-style:none;padding:0;display:grid;gap:.65rem}.habit-row{display:flex;align-items:center;gap:.6rem;padding:.85rem 1rem;border:1px solid #e7e0eb;border-radius:12px}.habit-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:.25rem}.habit-main small{color:#716a78}.habit-edit,.habit-delete{border:0;background:transparent;padding:.25rem .4rem;cursor:pointer;color:#6f6875}.habit-delete{font-size:1.2rem;line-height:1}.habit-delete:hover{color:#9e3446}.habits-head{display:flex;align-items:center;justify-content:space-between;gap:1rem}.habits-intro{color:#716a78}@media(max-width:700px){.year-months{grid-template-columns:repeat(2,minmax(0,1fr))}.year-month{padding:.5rem}.year-day{font-size:.68rem;min-height:19px}.checklist-actions{gap:.25rem}.icon-action{width:34px;height:34px}}@media(max-width:420px){.year-months{grid-template-columns:1fr 1fr}.year-head{gap:.5rem}.year-head h2{font-size:1.05rem}}
+
+
+/* ============ Control de salud ============ */
+.health-view { display:flex; flex-direction:column; gap:1rem; padding-bottom:2rem; }
+.health-head, .health-section-head { display:flex; align-items:center; justify-content:space-between; gap:.75rem; flex-wrap:wrap; }
+.health-head .view-title, .health-section-head h3 { margin:0; }
+.health-stats { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; }
+.health-stats article { display:flex; flex-direction:column; gap:.15rem; padding:.9rem; background:var(--c-surface); border:1px solid var(--c-border); border-radius:12px; }
+.health-stats strong { font-family:var(--font-display); font-size:1.5rem; font-weight:500; }
+.health-stats span { font-size:.78rem; color:var(--c-ink-soft); }
+.health-view .settings-block { background:var(--c-surface); border:1px solid var(--c-border); border-radius:14px; padding:1rem; margin:0; }
+.health-view .settings-block h3 { margin-top:0; }
+.health-type { display:inline-block; border-radius:999px; padding:.2rem .55rem; background:var(--c-medical-2); color:#275574; font-size:.75rem; font-weight:600; }
+.health-record, .health-intake { padding:1rem 0; border-bottom:1px solid var(--c-border); overflow-wrap:anywhere; }
+.health-record:last-child, .health-intake:last-child { border-bottom:0; }
+.health-record-head { display:flex; align-items:flex-start; justify-content:space-between; gap:.6rem; }
+.health-record h4 { margin:.35rem 0 0; font-size:1.05rem; font-weight:600; }
+.health-duration { white-space:nowrap; font-size:.8rem; color:var(--c-ink-soft); background:var(--c-surface-2); padding:.25rem .5rem; border-radius:8px; }
+.health-record p, .health-intake p { margin:.45rem 0; }
+.health-record-actions { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.65rem; }
+.health-record-actions button { font-size:.8rem; padding:.4rem .6rem; }
+.health-intake { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; }
+.health-form { display:flex; flex-direction:column; gap:.85rem; }
+.health-form label { display:flex; flex-direction:column; gap:.35rem; font-size:.88rem; font-weight:500; }
+.health-form input, .health-form select, .health-form textarea, .health-section-head select { width:100%; min-width:0; padding:.7rem; border:1px solid var(--c-border); border-radius:9px; background:#fff; color:var(--c-ink); font:inherit; }
+.health-form textarea { resize:vertical; }
+.health-form .fld-row { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.7rem; }
+.health-section-head select { width:auto; max-width:100%; }
+@media(max-width:420px) { .health-stats { gap:.35rem; } .health-stats article { padding:.65rem; } .health-stats strong { font-size:1.25rem; } .health-form .fld-row { grid-template-columns:1fr; } .health-intake { flex-direction:column; } }
+
+.checklist-fields-hidden { display: none !important; }

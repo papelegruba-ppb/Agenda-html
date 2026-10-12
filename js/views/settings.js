@@ -1,4 +1,4 @@
-import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting } from "../db.js";
+import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes } from "../db.js";
 import { GOOGLE_CLIENT_ID } from "../../config.js";
 import {
   initGoogle,
@@ -49,11 +49,11 @@ export async function renderSettings(root) {
       </section>
 
       <section class="settings-block">
-        <h3>Datos locales</h3>
-        <p class="hint">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
+        <h3>Copia de seguridad completa</h3>
+        <p class="hint">Incluye tareas, Checklist, Hábitos, proyectos, notas, sesiones, facturación, ajustes y el registro de salud. El archivo se descarga en este dispositivo y no se envía a ningún servidor.</p>\n        <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
         <div class="gcal-actions">
-          <button class="btn-ghost" id="btnExport">Exportar JSON</button>
-          <button class="btn-ghost" id="btnImport">Importar JSON</button>
+          <button class="btn-ghost" id="btnExport">Descargar backup completo</button>
+          <button class="btn-ghost" id="btnImport">Restaurar backup JSON</button>
         </div>
         <p class="hint small" id="localMsg"></p>
       </section>
@@ -143,12 +143,12 @@ export async function renderSettings(root) {
 
   /* Exportar JSON */
   root.querySelector("#btnExport").onclick = async () => {
-    const [tasks, habits, projects, notes, sessions, payments, settings] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings()]);
+    const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes()]);
     const payload = {
       format: "papelegruba-backup",
-      version: 2,
+      version: 3,
       exportedAt: new Date().toISOString(),
-      tasks, habits, projects, notes, sessions, payments, settings
+      tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes
     };
     const blob = new Blob(
       [JSON.stringify(payload, null, 2)],
@@ -183,7 +183,7 @@ export async function renderSettings(root) {
         return;
       }
 
-      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings"];
+      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes"];
       const total = collections.reduce((sum, key) => sum + (Array.isArray(data[key]) ? data[key].length : 0), 0);
       if (!total) {
         localMsg.textContent = "⚠️ El archivo no contiene datos reconocibles.";
