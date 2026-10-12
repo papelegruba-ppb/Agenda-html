@@ -1,4 +1,4 @@
-import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes, updateTask, deleteTask } from "../db.js";
+import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes, updateTask, deleteTask, deleteTaskLocalOnly } from "../db.js";
 import { GOOGLE_CLIENT_ID } from "../../config.js";
 import { connectDriveSync, getDriveSyncAccount, disconnectDriveSync, previewDriveSync, applyDriveSync, downloadConflictReport } from "../drive-sync.js";
 import {
@@ -268,7 +268,7 @@ export async function renderSettings(root) {
         });
         byGoogleId.set(googleId, group[0]);
         for (const duplicate of group.slice(1)) {
-          await deleteTask(duplicate.id);
+          await deleteTaskLocalOnly(duplicate.id);
           removedDuplicates++;
         }
       }
@@ -315,20 +315,59 @@ export async function renderSettings(root) {
         if (!groups.has(task.gcalEventId)) groups.set(task.gcalEventId, []);
         groups.get(task.gcalEventId).push(task);
       }
-      const duplicates = [...groups.values()].filter(group => group.length > 1).flatMap(group => group.slice(1));
+      // Conservar una copia por evento: priorizar finalizadas y, después, la más antigua.
+      const duplicates = [...groups.values()].filter(group => group.length > 1).flatMap(group => {
+        group.sort((a, b) => {
+          const doneDiff = Number(!!b.done) - Number(!!a.done);
+          if (doneDiff) return doneDiff;
+          return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+        });
+        return group.slice(1);
+      });
       if (!duplicates.length) { panel.innerHTML = '<p class="hint small">No se han encontrado duplicados con el mismo identificador de Google Calendar.</p>'; return; }
-      panel.innerHTML = '<h4>Duplicados detectados: ' + duplicates.length + '</h4><p class="hint small">Elige qué copia adicional eliminar. Cada elemento se elimina por separado.</p><div class="duplicate-list">' + duplicates.map(t => '<article class="duplicate-item" data-task-id="' + escapeAttr(t.id) + '" style="display:flex;justify-content:space-between;gap:.75rem;align-items:center;padding:.6rem 0;border-bottom:1px solid var(--c-border)"><div><strong>' + escapeHtml(t.title || "Evento sin título") + '</strong><small style="display:block">' + escapeHtml(t.date || "Sin fecha") + (t.time ? " · " + escapeHtml(t.time) : "") + '</small></div><button class="btn-ghost duplicate-delete" type="button">Eliminar esta copia</button></article>').join("") + '</div>';
+      panel.innerHTML = '<h4>Duplicados detectados: ' + duplicates.length + '</h4><p class="hint small">Se conservará la copia preferente de cada evento. La limpieza afecta solo a registros locales; no elimina eventos de Google Calendar.</p><button class="btn-primary" id="btnDeleteAllDuplicates" type="button">Eliminar todos los duplicados (' + duplicates.length + ')</button><div class="duplicate-list" style="margin-top:.75rem">' + duplicates.map(t => '<article class="duplicate-item" data-task-id="' + escapeAttr(t.id) + '" style="display:flex;justify-content:space-between;gap:.75rem;align-items:center;padding:.6rem 0;border-bottom:1px solid var(--c-border)"><div><strong>' + escapeHtml(t.title || "Evento sin título") + '</strong><small style="display:block">' + escapeHtml(t.date || "Sin fecha") + (t.time ? " · " + escapeHtml(t.time) : "") + '</small></div><button class="btn-ghost duplicate-delete" type="button">Eliminar esta copia</button></article>').join("") + '</div>';
+      const updateDuplicateCount = () => {
+        const remaining = panel.querySelectorAll(".duplicate-item").length;
+        const heading = panel.querySelector("h4");
+        const bulk = panel.querySelector("#btnDeleteAllDuplicates");
+        if (heading) heading.textContent = "Duplicados pendientes: " + remaining;
+        if (bulk) { bulk.textContent = "Eliminar todos los duplicados (" + remaining + ")"; bulk.disabled = remaining === 0; }
+        if (!remaining) panel.innerHTML = '<p class="hint small">Revisión terminada. No quedan copias adicionales en esta lista.</p>';
+      };
+      panel.querySelector("#btnDeleteAllDuplicates")?.addEventListener("click", async () => {
+        const remainingItems = [...panel.querySelectorAll(".duplicate-item")];
+        if (!remainingItems.length) return;
+        if (!confirm('¿Eliminar ' + remainingItems.length + ' copias duplicadas solo de este dispositivo? Se conservará una copia por evento y no se borrará ni modificará Google Calendar.')) return;
+        const bulk = panel.querySelector("#btnDeleteAllDuplicates");
+        if (bulk) bulk.disabled = true;
+        try {
+          for (const item of remainingItems) {
+            await deleteTaskLocalOnly(item.dataset.taskId);
+            item.remove();
+          }
+          const remainingTasks = await getAllTasks();
+          const countEl = root.querySelector("#taskCount");
+          if (countEl) countEl.textContent = remainingTasks.length;
+          updateDuplicateCount();
+        } catch (error) {
+          if (bulk) bulk.disabled = false;
+          const errorEl = document.createElement("p");
+          errorEl.className = "hint small";
+          errorEl.textContent = "La limpieza se ha detenido: " + (error.message || error) + ". Vuelve a revisar los duplicados antes de continuar.";
+          panel.prepend(errorEl);
+        }
+      });
       panel.querySelectorAll(".duplicate-delete").forEach(button => {
         button.addEventListener("click", async () => {
           const item = button.closest(".duplicate-item");
           const task = duplicates.find(t => t.id === item.dataset.taskId);
           if (!task || !confirm('¿Eliminar solo esta copia de "' + (task.title || "evento") + '" del dispositivo? No se borrará el evento de Google Calendar.')) return;
-          await deleteTask(task.id);
+          await deleteTaskLocalOnly(task.id);
           item.remove();
-          const heading = panel.querySelector("h4");
-          const remaining = panel.querySelectorAll(".duplicate-item").length;
-          if (heading) heading.textContent = "Duplicados pendientes: " + remaining;
-          if (!remaining) panel.innerHTML = '<p class="hint small">Revisión terminada. No quedan copias adicionales en esta lista.</p>';
+          const remainingTasks = await getAllTasks();
+          const countEl = root.querySelector("#taskCount");
+          if (countEl) countEl.textContent = remainingTasks.length;
+          updateDuplicateCount();
         });
       });
     } catch (e) { panel.textContent = "No se pudieron revisar los duplicados: " + (e.message || e); }
