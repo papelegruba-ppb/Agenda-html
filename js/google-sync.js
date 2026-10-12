@@ -113,7 +113,7 @@ async function syncChecklistTasks(localTasks, remoteTasks) {
       try { await deleteTask(local.id); } finally { applyingRemote = false; }
       continue;
     }
-    const localChanged = timestamp(local.updatedAt) > timestamp(local.gtaskSyncedAt);
+    const localChanged = !!local.gtaskSyncedAt && timestamp(local.updatedAt) > timestamp(local.gtaskSyncedAt);
     const remoteChanged = timestamp(remote.updated) > timestamp(local.gtaskUpdated);
     if (remoteChanged && !localChanged) {
       const completed = remote.status === "completed";
@@ -145,7 +145,7 @@ async function syncChecklistTasks(localTasks, remoteTasks) {
     if (duplicate) {
       await saveLocal(duplicate, {
         gtaskId: remote.id, gtaskUpdated: remote.updated || null,
-        gtaskSyncedAt: nowIso(), done: completed,
+        gtaskSyncedAt: nowIso(), date: remote.due ? remote.due.slice(0, 10) : "", done: completed,
         doneAt: completed ? (remote.completed || nowIso()) : null
       });
     } else {
@@ -185,7 +185,7 @@ async function syncCalendar(localTasks) {
     to: new Date(Date.now() + 5 * 365 * 864e5).toISOString()
   });
   const remoteById = new Map(remoteEvents.map(event => [event.id, event]));
-  const localEvents = localTasks.filter(task => !isChecklist(task) && task.date && task.type !== "medical");
+  const localEvents = localTasks.filter(task => !isChecklist(task) && task.date);
   const linked = localEvents.filter(task => task.gcalEventId);
 
   // Consultar los eventos vinculados que no aparecen en el listado para detectar
@@ -216,21 +216,32 @@ async function syncCalendar(localTasks) {
 
   const localIds = new Set(linked.map(task => task.gcalEventId));
   const remoteFingerprints = new Map(remoteEvents.map(event => [eventFingerprint(gcalEventToTask(event)), event]));
-  // Importar eventos de Google Calendar que aún no existen localmente.
+  // Importar eventos de Google Calendar o enlazarlos a tareas locales equivalentes.
   for (const remote of remoteEvents) {
     if (localIds.has(remote.id)) continue;
     const mapped = gcalEventToTask(remote);
-    applyingRemote = true;
-    try {
-      await addTask({ ...mapped, gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso() });
-    } finally { applyingRemote = false; }
+    const unlinkedMatch = localEvents.find(task => !task.gcalEventId && eventFingerprint(task) === eventFingerprint(mapped));
+    if (unlinkedMatch) {
+      await saveLocal(unlinkedMatch, {
+        title: mapped.title, notes: mapped.notes, date: mapped.date,
+        time: mapped.time || "", endTime: mapped.endTime || "", type: mapped.type,
+        allDay: mapped.allDay, gcalEventId: remote.id,
+        gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso()
+      });
+      localIds.add(remote.id);
+    } else {
+      applyingRemote = true;
+      try {
+        await addTask({ ...mapped, gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso() });
+      } finally { applyingRemote = false; }
+    }
   }
 
   // Crear en Google los eventos locales nuevos; si coinciden con uno remoto por
   // título/fecha/hora, vincularlos en vez de crear una copia duplicada.
   const refreshed = await getAllTasks();
   const knownIds = new Set(refreshed.filter(t => t.gcalEventId).map(t => t.gcalEventId));
-  for (const local of refreshed.filter(t => !isChecklist(t) && t.date && t.type !== "medical" && !t.gcalEventId)) {
+  for (const local of refreshed.filter(t => !isChecklist(t) && t.date && !t.gcalEventId)) {
     const match = remoteFingerprints.get(eventFingerprint(local));
     if (match) {
       await saveLocal(local, { gcalEventId: match.id, gcalUpdated: match.updated || null, gcalSyncedAt: nowIso() });
@@ -275,7 +286,7 @@ export function installGoogleSyncListeners() {
           const remote = await createGoogleTask(taskPayload(task));
           await saveLocal(task, { gtaskId: remote.id, gtaskUpdated: remote.updated || nowIso(), gtaskSyncedAt: nowIso() });
         }
-      } else if (task.date && task.type !== "medical") {
+      } else if (task.date) {
         if (task.gcalEventId) {
           const remote = await updateCalendarEvent(task.gcalEventId, calendarPayload(task));
           await saveLocal(task, { gcalUpdated: remote.updated || nowIso(), gcalSyncedAt: nowIso() });
