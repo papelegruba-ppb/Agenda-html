@@ -42,7 +42,7 @@ export async function renderSettings(root) {
         <div class="gcal-actions">
           ${connected
             ? `
-              <button class="btn-primary" id="btnImportGCAL">Importar desde Google Calendar</button>
+              <button class="btn-primary" id="btnImportGCAL">Importar solo eventos nuevos</button>
               <button class="btn-ghost" id="btnFindDuplicates">Revisar duplicados importados</button>
               <button class="btn-ghost" id="btnDisconnect">Desconectar</button>
             `
@@ -220,9 +220,10 @@ export async function renderSettings(root) {
   /* Importar desde Google Calendar */
   root.querySelector("#btnImportGCAL")?.addEventListener("click", async () => {
     if (!confirm(
-      "Se van a importar TODOS los eventos de tu calendario de Google desde 2025 hasta hoy.\n\n" +
-      "Los eventos se convertirán en tareas de Papelegruba. Los ya importados se actualizarán en lugar de duplicarse.\n\n" +
-      "¿Continuar?"
+      "Se descargarán los eventos de Google Calendar desde 2025 hasta hoy.\n\n" +
+      "Solo se añadirán eventos que aún no estén importados. Los ya existentes no se actualizarán. " +
+      "También se eliminarán automáticamente las copias locales repetidas que tengan el mismo identificador de Google Calendar.\n\n" +
+      "No se borrará ningún evento de Google Calendar. ¿Continuar?"
     )) return;
 
     msg.textContent = "Descargando eventos de Google…";
@@ -234,36 +235,61 @@ export async function renderSettings(root) {
         }
       });
 
-      msg.textContent = `Descargados ${events.length}. Guardando en Papelegruba…`;
+      msg.textContent = `Descargados ${events.length}. Comprobando los ya importados y limpiando duplicados locales…`;
 
       const { addTask, getAllTasks } = await import("../db.js");
       const existingTasks = await getAllTasks();
-      const byGoogleId = new Map();
+      const groupsByGoogleId = new Map();
       for (const task of existingTasks) {
-        if (task.gcalEventId && !byGoogleId.has(task.gcalEventId)) byGoogleId.set(task.gcalEventId, task);
+        if (!task.gcalEventId || task.isChecklist) continue;
+        if (!groupsByGoogleId.has(task.gcalEventId)) groupsByGoogleId.set(task.gcalEventId, []);
+        groupsByGoogleId.get(task.gcalEventId).push(task);
       }
-      let created = 0;
-      let updated = 0;
-      let skipped = 0;
-      for (const ev of events) {
-        const task = gcalEventToTask(ev);
-        if (!task.date || !ev.id) { skipped++; continue; }
-        const existing = byGoogleId.get(ev.id);
-        if (existing) {
-          const { id: keepId, ...patch } = task;
-          await updateTask(existing.id, { ...patch, gcalEventId: ev.id, done: existing.done, doneAt: existing.doneAt, projectId: existing.projectId, createdAt: existing.createdAt });
-          updated++;
-        } else {
-          const added = await addTask(task);
-          byGoogleId.set(ev.id, added);
-          created++;
+
+      // Mantener una sola tarea por evento de Google. Preferimos la que conserva
+      // estado de finalización y, después, la más antigua; eliminamos solo copias
+      // locales con el mismo gcalEventId, nunca eventos del calendario remoto.
+      const byGoogleId = new Map();
+      let removedDuplicates = 0;
+      for (const [googleId, group] of groupsByGoogleId) {
+        group.sort((a, b) => {
+          const doneDiff = Number(!!b.done) - Number(!!a.done);
+          if (doneDiff) return doneDiff;
+          return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+        });
+        byGoogleId.set(googleId, group[0]);
+        for (const duplicate of group.slice(1)) {
+          await deleteTask(duplicate.id);
+          removedDuplicates++;
         }
       }
 
-      await setSetting("lastSync", new Date().toLocaleString("es-ES"));
-      msg.textContent = `Importación terminada: ${created} nuevos, ${updated} actualizados y ${skipped} omitidos. No se han creado copias nuevas de eventos ya importados.`;
+      let created = 0;
+      let alreadyPresent = 0;
+      let skipped = 0;
+      const seenInThisImport = new Set();
+      for (const ev of events) {
+        if (!ev?.id || !ev.start?.dateTime && !ev.start?.date) { skipped++; continue; }
+        if (seenInThisImport.has(ev.id)) {
+          alreadyPresent++;
+          continue;
+        }
+        seenInThisImport.add(ev.id);
+        if (byGoogleId.has(ev.id)) {
+          alreadyPresent++;
+          continue;
+        }
+        const task = gcalEventToTask(ev);
+        if (!task.date) { skipped++; continue; }
+        const added = await addTask(task);
+        byGoogleId.set(ev.id, added);
+        created++;
+      }
 
-      setTimeout(() => renderSettings(root), 1500);
+      await setSetting("lastSync", new Date().toLocaleString("es-ES"));
+      msg.textContent = `Importación terminada: ${created} eventos nuevos añadidos, ${alreadyPresent} ya existentes omitidos, ${removedDuplicates} duplicados locales eliminados y ${skipped} eventos omitidos. Los eventos existentes no se han actualizado y no se ha borrado nada de Google Calendar.`;
+
+      setTimeout(() => renderSettings(root), 1800);
     } catch (e) {
       msg.textContent = "❌ Error: " + (e.message || e);
     }
