@@ -14,6 +14,7 @@ import {
   listBackupsOnDrive,
   downloadBackupFromDrive
 } from "../google.js";
+import { syncGoogleData } from "../google-sync.js";
 
 export async function renderSettings(root) {
   const clientId = (await getSetting("googleClientId")) || GOOGLE_CLIENT_ID;
@@ -204,6 +205,14 @@ export async function renderSettings(root) {
       await initGoogle();
       await requestToken();
       try { await fetchUserEmail(); } catch (e) {}
+      const msg = root.querySelector("#gcalMsg");
+      if (msg) msg.textContent = "Google conectado. Sincronizando Calendar y Checklist…";
+      try {
+        await syncGoogleData({ interactive: true });
+      } catch (syncError) {
+        if (msg) msg.textContent = "Conexión establecida, pero la sincronización no terminó: " + (syncError.message || syncError);
+        return;
+      }
       renderSettings(root);
     } catch (e) {
       alert("Error al conectar:\n\n" + (e.message || e));
