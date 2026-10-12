@@ -7,7 +7,17 @@ export async function renderProjects(root) {
   await draw();
 
   async function draw() {
-    const [allProjects, tasks] = await Promise.all([getAllProjects(), getAllTasks()]);
+    const [allProjects, loadedTasks] = await Promise.all([getAllProjects(), getAllTasks()]);
+    // Las tareas asignadas a Proyectos son tareas de Checklist, no eventos nuevos.
+    // Se convierten localmente una sola vez; los eventos remotos existentes no se borran.
+    for (const task of loadedTasks) {
+      if (task.projectId && task.type !== "medical" && task.isChecklist !== true) {
+        await updateTask(task.id, { isChecklist: true });
+      }
+    }
+    const tasks = loadedTasks.map(task =>
+      task.projectId && task.type !== "medical" ? { ...task, isChecklist: true } : task
+    );
     const projects = allProjects.filter(p => showArchived ? p.archived : !p.archived);
     projects.sort((a, b) => (a.name || "").localeCompare(b.name || "", "es"));
     root.innerHTML = `
