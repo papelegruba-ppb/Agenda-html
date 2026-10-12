@@ -52,10 +52,18 @@ export async function renderSettings(root) {
         <h3>Copia de seguridad completa</h3>
         <p class="hint">Incluye tareas, Checklist, Hábitos, proyectos, notas, sesiones, facturación, ajustes y el registro de salud. El archivo se descarga en este dispositivo y no se envía a ningún servidor.</p>\n        <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
         <div class="gcal-actions">
-          <button class="btn-ghost" id="btnExport">Descargar backup completo</button>
-          <button class="btn-ghost" id="btnImport">Restaurar backup JSON</button>
+          <button class="btn-ghost" id="btnExport">Descargar backup en este dispositivo</button>
+          <button class="btn-ghost" id="btnImport">Restaurar archivo local</button>
         </div>
-        <p class="hint small" id="localMsg"></p>
+        <div class="gcal-actions" style="margin-top:.6rem">
+          <button class="btn-primary" id="btnDriveBackup">Guardar backup en Google Drive</button>
+          <button class="btn-ghost" id="btnDriveList">Buscar copias en Drive</button>
+        </div>
+        <label class="fld-label" style="margin-top:.6rem">Copia de Drive
+          <select id="driveBackupSelect" style="width:100%;padding:.6rem;border:1px solid var(--c-border);border-radius:9px;background:#fff;color:var(--c-ink)"><option value="">Primero busca copias guardadas</option></select>
+        </label>
+        <button class="btn-ghost" id="btnDriveRestore">Restaurar copia seleccionada de Drive</button>
+        <p class="hint small" id="localMsg">La copia local se descarga como JSON. Drive requiere autorizar el acceso a archivos creados por Papelegruba.</p>
       </section>
 
       <section class="settings-block">
