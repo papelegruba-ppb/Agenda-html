@@ -66,11 +66,11 @@ export async function openTaskForm(task = null, onSaved) {
         <input name="title" required value="${escapeAttr(t.title)}" placeholder="¿Qué hay que hacer?">
       </label>
 
-      <div class="fld-row ${t.isChecklist ? "checklist-fields-hidden" : ""}">
+      <div class="fld-row">
         <label>Fecha
           <input name="date" type="date" value="${t.isChecklist ? (t.date || "") : (t.date || today)}">
         </label>
-        <label>Hora
+        <label ${t.isChecklist ? 'style="display:none"' : ""}>Hora
           <input name="time" type="time" value="${t.time || ""}">
         </label>
       </div>
@@ -243,7 +243,7 @@ function readTaskForm(root) {
   const data = {
     title: (fd.get("title") || "").toString().trim(),
     notes: (fd.get("notes") || "").toString(),
-    date: fd.get("isChecklist") === "true" ? "" : (fd.get("date") || null),
+    date: fd.get("date") || "",
     time: fd.get("isChecklist") === "true" ? null : (fd.get("time") || null),
     endTime: fd.get("isChecklist") === "true" ? null : (fd.get("endTime") || null),
     duration: Number(fd.get("duration")) || 25,
