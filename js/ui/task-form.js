@@ -244,6 +244,7 @@ function readTaskForm(root) {
     title: (fd.get("title") || "").toString().trim(),
     notes: (fd.get("notes") || "").toString(),
     date: fd.get("date") || "",
+    isChecklist: fd.get("isChecklist") === "true",
     time: fd.get("isChecklist") === "true" ? null : (fd.get("time") || null),
     endTime: fd.get("isChecklist") === "true" ? null : (fd.get("endTime") || null),
     duration: Number(fd.get("duration")) || 25,
