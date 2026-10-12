@@ -68,14 +68,14 @@ export async function renderProjects(root) {
       card.querySelectorAll(".project-task-edit").forEach(button => {
         button.onclick = async () => {
           const task = tasks.find(item => item.id === button.dataset.taskId);
-          if (task) await openTaskForm(task, draw);
+          if (task) await openTaskForm({ ...task, isChecklist: true }, draw);
         };
       });
       card.querySelectorAll(".project-task-toggle").forEach(button => {
         button.onclick = async () => {
           const task = tasks.find(item => item.id === button.dataset.taskId);
           if (!task) return;
-          await updateTask(task.id, { done: !task.done, doneAt: !task.done ? new Date().toISOString() : null });
+          await updateTask(task.id, { done: !task.done, doneAt: !task.done ? new Date().toISOString() : null, isChecklist: true });
           await draw();
         };
       });
