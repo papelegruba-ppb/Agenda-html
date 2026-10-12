@@ -52,8 +52,8 @@ export async function renderSettings(root) {
         <h3>Datos locales</h3>
         <p class="hint">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
         <div class="gcal-actions">
-          <button class="btn-ghost" id="btnExport">Exportar JSON</button>
-          <button class="btn-ghost" id="btnImport">Importar JSON</button>
+          <button class="btn-ghost" id="btnExport">Descargar backup completo</button>
+          <button class="btn-ghost" id="btnImport">Restaurar backup JSON</button>
         </div>
         <p class="hint small" id="localMsg"></p>
       </section>
