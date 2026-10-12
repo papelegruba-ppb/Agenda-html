@@ -65,7 +65,7 @@ export function openTaskForm(task = null, onSaved) {
         <input name="title" required value="${escapeAttr(t.title)}" placeholder="¿Qué hay que hacer?">
       </label>
 
-      <div class="fld-row">
+      <div class="fld-row ${t.isChecklist ? "checklist-fields-hidden" : ""}">
         <label>Fecha
           <input name="date" type="date" value="${t.isChecklist ? (t.date || "") : (t.date || today)}">
         </label>
