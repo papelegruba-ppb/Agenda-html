@@ -41,7 +41,7 @@ export async function initGoogle() {
 }
 
 /* ---------- Pedir token (popup) ---------- */
-export async function requestToken() {
+export async function requestToken({ silent = false } = {}) {
   if (accessToken && Date.now() < tokenExpiresAt - 60000) {
     return accessToken;
   }
@@ -59,7 +59,7 @@ export async function requestToken() {
       resolve(accessToken);
     };
     tokenClient.requestAccessToken({
-      prompt: accessToken ? "" : "consent"
+      prompt: silent || accessToken ? "" : "consent"
     });
   });
 }
@@ -201,6 +201,87 @@ export function gcalEventToTask(event) {
   };
 }
 
+
+
+/* ---------- Sincronización bidireccional de Calendar y Tasks ---------- */
+const TASKS_API = "https://tasks.googleapis.com/tasks/v1";
+
+async function tasksApi(path, init = {}) {
+  if (!accessToken || Date.now() >= tokenExpiresAt - 60000) {
+    throw new Error("Token de Google no disponible.");
+  }
+  const res = await fetch(`${TASKS_API}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      ...(init.headers || {})
+    }
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Google Tasks API ${res.status}: ${txt}`);
+  }
+  return res.status === 204 ? null : res.json();
+}
+
+export async function listGoogleTasks() {
+  const all = [];
+  let pageToken = null;
+  do {
+    const params = new URLSearchParams({ maxResults: "100", showCompleted: "true", showHidden: "true", showDeleted: "true" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const data = await tasksApi(`/lists/@default/tasks?${params}`);
+    all.push(...(data.items || []));
+    pageToken = data.nextPageToken || null;
+  } while (pageToken);
+  return all;
+}
+
+export async function createGoogleTask(task) {
+  return tasksApi("/lists/@default/tasks", {
+    method: "POST",
+    body: JSON.stringify(task)
+  });
+}
+
+export async function updateGoogleTask(id, task) {
+  return tasksApi(`/lists/@default/tasks/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(task)
+  });
+}
+
+export async function deleteGoogleTask(id) {
+  return tasksApi(`/lists/@default/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function createCalendarEvent(event) {
+  return api(`/calendars/${encodeURIComponent(DEFAULT_CALENDAR_ID)}/events`, {
+    method: "POST",
+    body: JSON.stringify(event)
+  });
+}
+
+export async function updateCalendarEvent(id, event) {
+  return api(`/calendars/${encodeURIComponent(DEFAULT_CALENDAR_ID)}/events/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(event)
+  });
+}
+
+export async function deleteCalendarEvent(id) {
+  return api(`/calendars/${encodeURIComponent(DEFAULT_CALENDAR_ID)}/events/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function getCalendarEvent(id) {
+  try {
+    return await api(`/calendars/${encodeURIComponent(DEFAULT_CALENDAR_ID)}/events/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (/Google API 404/.test(error.message || "")) return null;
+    throw error;
+  }
+}
 
 /* ---------- Copias de seguridad completas en Google Drive ---------- */
 async function driveFetch(url, init = {}) {
