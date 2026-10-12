@@ -52,7 +52,7 @@ export function openTaskForm(task = null, onSaved) {
   const isEdit = !!(task && task.id);
   const today = iso(new Date());
   const t = task || {
-    title: "", notes: "", date: today, time: "", endTime: "",
+    title: "", notes: "", date: task?.isChecklist ? "" : today, time: "", endTime: "",
     type: "personal", priority: 0, duration: 25
   };
 
@@ -60,14 +60,14 @@ export function openTaskForm(task = null, onSaved) {
   const thisTaskIsTimer = activeTimer && t.id && activeTimer.taskId === t.id;
 
   const body = `
-    <form class="task-form" autocomplete="off">
+    <form class="task-form" autocomplete="off">\n      <input type="hidden" name="isChecklist" value="${t.isChecklist ? "true" : "false"}">
       <label class="fld-title">Título
         <input name="title" required value="${escapeAttr(t.title)}" placeholder="¿Qué hay que hacer?">
       </label>
 
       <div class="fld-row">
         <label>Fecha
-          <input name="date" type="date" value="${t.date || today}">
+          <input name="date" type="date" value="${t.isChecklist ? (t.date || "") : (t.date || today)}">
         </label>
         <label>Hora
           <input name="time" type="time" value="${t.time || ""}">
