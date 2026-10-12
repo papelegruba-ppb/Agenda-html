@@ -235,9 +235,9 @@ function readTaskForm(root) {
   const data = {
     title: (fd.get("title") || "").toString().trim(),
     notes: (fd.get("notes") || "").toString(),
-    date: fd.get("date") || null,
-    time: fd.get("time") || null,
-    endTime: fd.get("endTime") || null,
+    date: fd.get("isChecklist") === "true" ? "" : (fd.get("date") || null),
+    time: fd.get("isChecklist") === "true" ? null : (fd.get("time") || null),
+    endTime: fd.get("isChecklist") === "true" ? null : (fd.get("endTime") || null),
     duration: Number(fd.get("duration")) || 25,
     type: cat,
     priority: 0
