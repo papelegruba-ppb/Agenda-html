@@ -8,7 +8,10 @@ import {
   getStoredEmail,
   fetchUserEmail,
   importAllEvents,
-  gcalEventToTask
+  gcalEventToTask,
+  uploadBackupToDrive,
+  listBackupsOnDrive,
+  downloadBackupFromDrive
 } from "../google.js";
 
 export async function renderSettings(root) {
