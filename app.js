@@ -8,7 +8,8 @@ import { renderTimer } from "./js/views/timer.js";
 import { renderProjects } from "./js/views/projects.js";
 import { renderHabits } from "./js/views/habits.js";
 import { renderSettings } from "./js/views/settings.js";
-import { renderMedical } from "./js/views/medical.js";\nimport { renderHealth } from "./js/views/health.js";
+import { renderMedical } from "./js/views/medical.js";
+import { renderHealth } from "./js/views/health.js";
 import { getActiveTimer, getElapsedMs, formatElapsed, onChange } from "./js/hours.js";
 
 const views = {
@@ -21,7 +22,8 @@ const views = {
   projects: renderProjects,
   habits: renderHabits,
   settings: renderSettings,
-  medical: renderMedical,\n  health: renderHealth
+  medical: renderMedical,
+  health: renderHealth
 };
 
 const root = document.getElementById("view-root");
