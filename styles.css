@@ -1225,3 +1225,29 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 @media(max-width:420px) { .health-stats { gap:.35rem; } .health-stats article { padding:.65rem; } .health-stats strong { font-size:1.25rem; } .health-form .fld-row { grid-template-columns:1fr; } .health-intake { flex-direction:column; } }
 
 .checklist-fields-hidden { display: none !important; }
+
+
+/* ============ Proyectos ============ */
+.projects-view { display:flex; flex-direction:column; gap:.8rem; padding-bottom:2rem; }
+.projects-head, .projects-toolbar { display:flex; align-items:center; justify-content:space-between; gap:.6rem; flex-wrap:wrap; }
+.projects-head .view-title { margin:0; }
+.projects-toolbar { font-size:.8rem; color:var(--c-ink-soft); }
+.projects-list { display:flex; flex-direction:column; gap:.8rem; }
+.project-card { background:var(--c-surface); border:1px solid var(--c-border); border-radius:14px; padding:.9rem; min-width:0; }
+.project-card-head { display:flex; align-items:center; gap:.65rem; }
+.project-color { width:14px; height:42px; border-radius:999px; flex:0 0 auto; }
+.project-card-title { flex:1; min-width:0; }
+.project-card-title h3 { margin:0; font-size:1.05rem; overflow-wrap:anywhere; }
+.project-card-title small { color:var(--c-ink-soft); font-size:.78rem; }
+.project-progress { height:6px; border-radius:999px; background:var(--c-surface-2); overflow:hidden; margin:.75rem 0; }
+.project-progress span { display:block; height:100%; border-radius:inherit; }
+.project-tasks { display:flex; flex-direction:column; gap:.45rem; }
+.project-task { display:grid; grid-template-columns:20px minmax(0,1fr) auto; gap:.4rem; align-items:start; font-size:.84rem; padding:.35rem 0; border-bottom:1px solid var(--c-border); }
+.project-task:last-child { border-bottom:0; }
+.project-task span:nth-child(2) { overflow-wrap:anywhere; }
+.project-task small { color:var(--c-ink-soft); font-size:.72rem; white-space:nowrap; }
+.project-task.done { opacity:.6; }
+.project-task.done span:nth-child(2) { text-decoration:line-through; }
+.project-actions { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.75rem; }
+.project-actions button { font-size:.8rem; }
+@media(max-width:420px) { .project-task { grid-template-columns:18px minmax(0,1fr); } .project-task small { grid-column:2; white-space:normal; } }
