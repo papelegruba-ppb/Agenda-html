@@ -7,6 +7,8 @@ let tokenExpiresAt = 0;
 let currentEmail = null;
 
 const CAL_API = "https://www.googleapis.com/calendar/v3";
+const DRIVE_API = "https://www.googleapis.com/drive/v3";
+const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 
 /* ---------- Carga de la librería GIS ---------- */
 function loadGis() {
@@ -197,4 +199,65 @@ export function gcalEventToTask(event) {
     gcalUpdated: event.updated,
     allDay: isAllDay
   };
+}
+
+
+/* ---------- Copias de seguridad completas en Google Drive ---------- */
+async function driveFetch(url, init = {}) {
+  if (!accessToken || Date.now() >= tokenExpiresAt - 60000) {
+    throw new Error("Conecta con Google y autoriza el acceso a Drive antes de continuar.");
+  }
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(init.headers || {})
+    }
+  });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Google Drive ${response.status}: ${detail || response.statusText}`);
+  }
+  return response;
+}
+
+export async function uploadBackupToDrive(payload) {
+  const boundary = "papelegruba_backup_boundary";
+  const date = new Date().toISOString().slice(0, 10);
+  const metadata = {
+    name: `papelegruba-backup-${date}.json`,
+    mimeType: "application/json",
+    description: "Copia de seguridad completa de Papelegruba"
+  };
+  const body =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify(metadata) +
+    `\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+    JSON.stringify(payload, null, 2) +
+    `\r\n--${boundary}--`;
+  const response = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,createdTime,size,webViewLink`, {
+    method: "POST",
+    headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+    body
+  });
+  return response.json();
+}
+
+export async function listBackupsOnDrive() {
+  const q = "name contains 'papelegruba-backup-' and trashed = false";
+  const params = new URLSearchParams({
+    q,
+    orderBy: "createdTime desc",
+    pageSize: "100",
+    fields: "files(id,name,createdTime,size,mimeType,webViewLink)"
+  });
+  const response = await driveFetch(`${DRIVE_API}/files?${params}`);
+  const data = await response.json();
+  return (data.files || []).filter(file => file.mimeType === "application/json");
+}
+
+export async function downloadBackupFromDrive(fileId) {
+  if (!fileId) throw new Error("Selecciona una copia de seguridad.");
+  const response = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`);
+  return response.text();
 }
