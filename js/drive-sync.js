@@ -164,7 +164,9 @@ function planMerge(local, remote, base) {
     const out = new Map();
     for (const id of ids) {
       const l = lm.get(id), r = rm.get(id), b = bm.get(id);
-      // Deletions are intentionally not propagated: an absent record never deletes its counterpart.
+      // Deletions are intentionally not propagated. If both copies are absent but the base had the record,
+      // restore the base version instead of treating absence as an instruction to delete it remotely.
+      if (l === undefined && r === undefined) { if (b !== undefined) out.set(id, b); continue; }
       if (l === undefined) { if (r !== undefined) out.set(id, r); continue; }
       if (r === undefined) { out.set(id, l); continue; }
       if (same(l, r)) { out.set(id, l); counts.unchanged++; continue; }
