@@ -8,6 +8,7 @@ import {
 let syncing = false;
 let applyingRemote = false;
 let listenerInstalled = false;
+let pollStarted = false;
 
 const isChecklist = task => task?.isChecklist === true ||
   (!task?.date && !task?.gcalEventId && task?.type !== "medical");
@@ -299,6 +300,24 @@ export function installGoogleSyncListeners() {
       console.warn("No se pudo sincronizar el cambio con Google; se reintentará al sincronizar:", error);
     }
   });
+
+  if (!pollStarted) {
+    pollStarted = true;
+    // Google Calendar/Tasks no notifican directamente a una PWA estática;
+    // consultar periódicamente permite recoger cambios externos mientras está abierta.
+    window.setInterval(() => {
+      if (document.visibilityState === "visible" && isConnected()) {
+        syncGoogleData({ interactive: false }).catch(error =>
+          console.info("Sincronización periódica pendiente:", error?.message || error)
+        );
+      }
+    }, 5 * 60 * 1000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible" && isConnected()) {
+        syncGoogleData({ interactive: false }).catch(() => {});
+      }
+    });
+  }
 }
 
 export async function syncGoogleData({ interactive = false } = {}) {
