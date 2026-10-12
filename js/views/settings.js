@@ -49,8 +49,8 @@ export async function renderSettings(root) {
       </section>
 
       <section class="settings-block">
-        <h3>Datos locales</h3>
-        <p class="hint">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
+        <h3>Copia de seguridad completa</h3>
+        <p class="hint">Incluye tareas, Checklist, Hábitos, proyectos, notas, sesiones, facturación, ajustes y el registro de salud. El archivo se descarga en este dispositivo y no se envía a ningún servidor.</p>\n        <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
         <div class="gcal-actions">
           <button class="btn-ghost" id="btnExport">Descargar backup completo</button>
           <button class="btn-ghost" id="btnImport">Restaurar backup JSON</button>
