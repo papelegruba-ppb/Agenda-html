@@ -1,5 +1,6 @@
 import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes, updateTask, deleteTask } from "../db.js";
 import { GOOGLE_CLIENT_ID } from "../../config.js";
+import { connectDriveSync, getDriveSyncAccount, disconnectDriveSync, previewDriveSync, applyDriveSync, downloadConflictReport } from "../drive-sync.js";
 import {
   initGoogle,
   requestToken,
@@ -53,6 +54,22 @@ export async function renderSettings(root) {
         ${lastSync ? `<p class="hint small">Última sincronización: ${escapeHtml(lastSync)}</p>` : ""}
       </section>
 
+      <section class="settings-block" id="driveSyncBlock">
+        <h3>Sincronización entre dispositivos</h3>
+        <p class="hint">Sincroniza los datos de Papelegruba con el espacio privado appDataFolder de la cuenta de Google que elijas. Puede ser la misma de Calendar o una distinta; no accede a tus archivos normales de Drive.</p>
+        <p class="hint" id="driveSyncAccountLabel">Consultando cuenta…</p>
+        <div class="gcal-actions">
+          <button class="btn-primary" id="btnDriveChooseAccount">Elegir cuenta de Google</button>
+          <button class="btn-ghost" id="btnDriveSyncDisconnect">Desvincular cuenta</button>
+        </div>
+        <div class="gcal-actions" style="margin-top:.6rem">
+          <button class="btn-primary" id="btnDriveSyncPreview">Analizar cambios</button>
+          <button class="btn-ghost" id="btnDriveSyncApply" disabled>Aplicar sincronización</button>
+        </div>
+        <p class="hint small" id="driveSyncMsg">Sincronización manual con vista previa. No se propagan eliminaciones y los cambios incompatibles bloquean la operación.</p>
+        <div id="driveSyncReview"></div>
+      </section>
+
       <section class="settings-block">
         <h3>Copia de seguridad completa</h3>
         <p class="hint">Incluye tareas, Checklist, Hábitos, proyectos, notas, sesiones, facturación, ajustes y el registro de salud. El archivo se descarga en este dispositivo y no se envía a ningún servidor.</p>\n        <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
@@ -88,6 +105,98 @@ export async function renderSettings(root) {
 
   const msg = root.querySelector("#gcalMsg");
   const localMsg = root.querySelector("#localMsg");
+  let driveSyncPlan = null;
+  const driveSyncMsg = root.querySelector("#driveSyncMsg");
+  const driveSyncReview = root.querySelector("#driveSyncReview");
+  const driveSyncApplyButton = root.querySelector("#btnDriveSyncApply");
+
+  async function refreshDriveSyncAccountLabel() {
+    const account = await getDriveSyncAccount();
+    const label = root.querySelector("#driveSyncAccountLabel");
+    if (label) label.textContent = account.email
+      ? `Cuenta elegida: ${account.email}. Tras recargar la página tendrás que volver a autorizar el acceso.`
+      : "No hay una cuenta de sincronización elegida.";
+  }
+  await refreshDriveSyncAccountLabel();
+
+  root.querySelector("#btnDriveChooseAccount")?.addEventListener("click", async () => {
+    driveSyncPlan = null;
+    driveSyncApplyButton.disabled = true;
+    driveSyncReview.innerHTML = "";
+    driveSyncMsg.textContent = "Abriendo selección de cuenta de Google…";
+    try {
+      const result = await connectDriveSync({ chooseAccount: true });
+      await refreshDriveSyncAccountLabel();
+      driveSyncMsg.textContent = `Cuenta autorizada: ${result.email || "Google"}. Ahora analiza los cambios.`;
+    } catch (error) {
+      driveSyncMsg.textContent = "No se ha conectado la cuenta: " + (error.message || error);
+    }
+  });
+
+  root.querySelector("#btnDriveSyncDisconnect")?.addEventListener("click", async () => {
+    if (!confirm("¿Desvincular la cuenta de este dispositivo? Los datos locales y el archivo remoto se conservarán.")) return;
+    await disconnectDriveSync();
+    driveSyncPlan = null;
+    driveSyncApplyButton.disabled = true;
+    driveSyncReview.innerHTML = "";
+    await refreshDriveSyncAccountLabel();
+    driveSyncMsg.textContent = "Cuenta desvinculada. No se han borrado datos.";
+  });
+
+  root.querySelector("#btnDriveSyncPreview")?.addEventListener("click", async () => {
+    driveSyncPlan = null;
+    driveSyncApplyButton.disabled = true;
+    driveSyncReview.innerHTML = "";
+    driveSyncMsg.textContent = "Comparando datos locales y de Drive…";
+    try {
+      const plan = await previewDriveSync();
+      driveSyncPlan = plan;
+      const localTotal = Object.values(plan.localCounts).reduce((a, b) => a + b, 0);
+      const remoteTotal = Object.values(plan.remoteCounts).reduce((a, b) => a + b, 0);
+      const mergedTotal = Object.values(plan.merged).reduce((a, list) => a + list.length, 0);
+      const detail = Object.keys(plan.localCounts).map(key =>
+        `<li><strong>${escapeHtml(key)}:</strong> local ${plan.localCounts[key]} · Drive ${plan.remoteCounts[key] || 0} · previsto ${plan.merged[key].length}</li>`
+      ).join("");
+      driveSyncReview.innerHTML = `
+        <div class="duplicate-review" style="margin-top:.75rem;padding:.75rem;border:1px solid var(--c-border);border-radius:10px">
+          <p><strong>Vista previa</strong></p>
+          <p class="hint small">Local: ${localTotal} registros · Drive: ${remoteTotal} · Resultado previsto: ${mergedTotal}</p>
+          <ul>${detail}</ul>
+          ${plan.conflicts.length
+            ? `<p class="hint"><strong>Conflictos: ${plan.conflicts.length}.</strong> Hay registros con el mismo ID modificados de forma diferente. No se aplicará ningún cambio hasta resolverlos.</p><button type="button" class="btn-ghost" id="btnDriveSyncConflictReport">Descargar informe de conflictos</button>`
+            : '<p class="hint">No se han detectado conflictos. Las eliminaciones no se propagan.</p>'}
+          <p class="hint small">${plan.remoteExists ? "Archivo remoto encontrado." : "No existe aún un archivo remoto."} Se comprobará de nuevo antes de guardar.</p>
+        </div>`;
+      if (plan.conflicts.length) {
+        driveSyncMsg.textContent = "Sincronización bloqueada por conflictos. No se ha cambiado ningún dato.";
+        driveSyncReview.querySelector("#btnDriveSyncConflictReport")?.addEventListener("click", () => downloadConflictReport(plan.conflicts));
+      } else {
+        driveSyncMsg.textContent = "Revisa el resumen y confirma para aplicar.";
+        driveSyncApplyButton.disabled = false;
+      }
+    } catch (error) {
+      driveSyncMsg.textContent = "No se pudo analizar: " + (error.message || error);
+    }
+  });
+
+  driveSyncApplyButton?.addEventListener("click", async () => {
+    if (!driveSyncPlan || driveSyncPlan.conflicts.length) return;
+    const localTotal = Object.values(driveSyncPlan.localCounts).reduce((a, b) => a + b, 0);
+    const remoteTotal = Object.values(driveSyncPlan.remoteCounts).reduce((a, b) => a + b, 0);
+    if (!confirm(`Se sincronizarán los datos de Papelegruba. Local: ${localTotal}; Drive: ${remoteTotal}. No se propagarán eliminaciones. Si Drive ha cambiado desde la vista previa, se cancelará. ¿Continuar?`)) return;
+    driveSyncApplyButton.disabled = true;
+    driveSyncMsg.textContent = "Aplicando sincronización…";
+    try {
+      await applyDriveSync(driveSyncPlan);
+      driveSyncPlan = null;
+      driveSyncReview.innerHTML = "";
+      driveSyncMsg.textContent = "Sincronización completada. Los datos locales se conservan.";
+      setTimeout(() => renderSettings(root), 1200);
+    } catch (error) {
+      driveSyncMsg.textContent = "No se ha completado: " + (error.message || error);
+      driveSyncApplyButton.disabled = false;
+    }
+  });
 
   /* Conectar */
   root.querySelector("#btnConnect")?.addEventListener("click", async () => {
