@@ -80,8 +80,7 @@
   window.addEventListener("error", (e) => {
     const d = document.createElement("pre");
     d.style.cssText = "position:fixed;top:0;left:0;right:0;background:#DC2127;color:#fff;padding:10px;font-size:12px;z-index:9999;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;";
-    d.textContent = "ERROR: " + (e.message || e.error) + "
-" + (e.filename || "") + ":" + (e.lineno || "");
+    d.textContent = "ERROR: " + (e.message || e.error) + "\n" + (e.filename || "") + ":" + (e.lineno || "");
     document.body.appendChild(d);
   });
   window.addEventListener("unhandledrejection", (e) => {
@@ -95,9 +94,7 @@
   import("./app.js").catch(err => {
     const d = document.createElement("pre");
     d.style.cssText = "position:fixed;top:0;left:0;right:0;background:#DC2127;color:#fff;padding:10px;font-size:12px;z-index:9999;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;";
-    d.textContent = "ERROR AL CARGAR app.js:
-
-" + (err.stack || err.message || err);
+    d.textContent = "ERROR AL CARGAR app.js:\n\n" + (err.stack || err.message || err);
     document.body.appendChild(d);
   });
 </script>
