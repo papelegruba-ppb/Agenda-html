@@ -1,5 +1,5 @@
 import { startOfWeek, addDays, iso, isSameDay } from "../dates.js";
-import { getTasksInRange } from "../db.js";
+import { getTasksInRange, deleteTask } from "../db.js";
 import { getCategory } from "../categories.js";
 import { openTaskForm } from "../ui/task-form.js";
 import { butterflySvg } from "../ui/butterfly.js";
@@ -69,11 +69,19 @@ export async function renderWeek(root) {
   // Click en tarea → abrir formulario
   root.querySelectorAll(".week-day-list .task-item").forEach(li => {
     li.onclick = (e) => {
+      if (e.target.closest(".task-delete")) return;
       e.stopPropagation();
       const id = li.dataset.taskId;
       const task = tasks.find(t => t.id === id);
       if (task) openTaskForm(task, () => renderWeek(root));
     };
+    li.querySelector(".task-delete")?.addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const task = tasks.find(t => t.id === li.dataset.taskId);
+      if (!task || !confirm('¿Eliminar solo este evento de Papelegruba? No se borrará de Google Calendar.')) return;
+      await deleteTask(task.id);
+      await renderWeek(root);
+    });
   });
 }
 
@@ -94,6 +102,7 @@ function renderWeekItem(t) {
         ${desc ? `<small class="task-notes">${escapeHtml(desc)}</small>` : ""}
       </div>
       <span class="butterfly type-${cat.id}" aria-hidden="true">${butterflySvg()}</span>
+      <button class="task-delete" type="button" aria-label="Eliminar este evento" title="Eliminar solo este evento">✕</button>
     </li>
   `;
 }
