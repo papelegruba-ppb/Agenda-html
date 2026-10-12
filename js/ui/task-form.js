@@ -1,6 +1,6 @@
 import { openModal } from "./modal.js";
 import { renderCategoryPicker, bindCategoryPicker, getSelectedCategory } from "./category-picker.js";
-import { addTask, updateTask } from "../db.js";
+import { addTask, updateTask, getAllProjects } from "../db.js";
 import { iso } from "../dates.js";
 import { startTimer, getActiveTimer, stopTimer } from "../hours.js";
 
@@ -48,7 +48,8 @@ const MEDICAL_FIELDS = `
   </div>
 `;
 
-export function openTaskForm(task = null, onSaved) {
+export async function openTaskForm(task = null, onSaved) {
+  const projects = (await getAllProjects()).filter(p => !p.archived);
   const isEdit = !!(task && task.id);
   const today = iso(new Date());
   const t = task || {
@@ -82,6 +83,13 @@ export function openTaskForm(task = null, onSaved) {
           <input name="duration" type="number" min="5" step="5" value="${t.duration ?? 25}">
         </label>
       </div>
+
+      <label>Proyecto
+        <select name="projectId">
+          <option value="">Sin proyecto</option>
+          ${projects.map(p => `<option value="${escapeAttr(p.id)}" ${p.id === t.projectId ? "selected" : ""}>${escapeHtml(p.name || "Proyecto sin nombre")}</option>`).join("")}
+        </select>
+      </label>
 
       <div class="fld-block">
         <span class="fld-label">Categoría</span>
@@ -240,6 +248,7 @@ function readTaskForm(root) {
     endTime: fd.get("isChecklist") === "true" ? null : (fd.get("endTime") || null),
     duration: Number(fd.get("duration")) || 25,
     type: cat,
+    projectId: fd.get("projectId") || null,
     priority: 0
   };
   if (cat === "medical") {
