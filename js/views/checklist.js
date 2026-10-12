@@ -38,7 +38,7 @@ export async function renderChecklist(root) {
   const refreshSelection = () => {
     root.querySelectorAll('.checklist-list .task-item').forEach(li => {
       let box = li.querySelector('.bulk-select');
-      if (selectionMode && !box) { box=document.createElement('input'); box.type='checkbox'; box.className='bulk-select'; box.setAttribute('aria-label','Seleccionar tarea'); li.prepend(box); }
+      if (selectionMode && !box) { box=document.createElement('input'); box.type='checkbox'; box.className='bulk-select'; box.setAttribute('aria-label','Seleccionar tarea'); box.addEventListener('click', e => e.stopPropagation()); li.prepend(box); }
       if (!selectionMode && box) box.remove();
     });
     selectButton?.classList.toggle('active', selectionMode);
