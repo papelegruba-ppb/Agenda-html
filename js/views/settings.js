@@ -1,4 +1,4 @@
-import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting } from "../db.js";
+import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes } from "../db.js";
 import { GOOGLE_CLIENT_ID } from "../../config.js";
 import {
   initGoogle,
