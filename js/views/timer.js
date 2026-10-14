@@ -142,7 +142,7 @@ function computeTotals(sessions, payments, categoryId) {
     if (s.billable || s.adjustment) {
       const amount = getSessionAmount(s);
       balance += s.adjustment ? -amount : (s.billable ? amount : 0);
-      if (Number(s.rate) > 0) rate = Number(s.rate);
+      if (categoryId !== "work-sye" && Number(s.rate) > 0) rate = Number(s.rate);
     }
   }
   balance -= paidAmount;
