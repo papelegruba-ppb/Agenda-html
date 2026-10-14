@@ -62,7 +62,12 @@ async function tx(store, mode, fn) {
     const t = db.transaction(store, mode);
     const s = t.objectStore(store);
     const out = fn(s);
-    t.oncomplete = () => resolve(out?.result ?? out);
+    t.oncomplete = () => {
+      if (mode === "readwrite") {
+        try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: Array.isArray(store) ? store.join(",") : store } })); } catch (_) {}
+      }
+      resolve(out?.result ?? out);
+    };
     t.onerror = () => reject(t.error);
   });
 }
