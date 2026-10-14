@@ -73,7 +73,7 @@ export async function renderSettings(root) {
 
       <section class="settings-block">
         <h3>Copia de seguridad completa</h3>
-        <p class="hint">Incluye tareas, Checklist, Hábitos, proyectos, notas, sesiones, facturación, ajustes y el registro de salud. El archivo se descarga en este dispositivo y no se envía a ningún servidor.</p>\n        <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
+        <p class="hint">Incluye tareas, Checklist, Hábitos, proyectos, notas, sesiones, facturación, ajustes, salud y papelera. La copia de Drive se actualiza automáticamente cuando hay cambios mientras Google mantiene la autorización activa; siempre se conserva una sola copia actualizada.</p>\n        <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
         <div class="gcal-actions">
           <button class="btn-ghost" id="btnExport">Descargar backup en este dispositivo</button>
           <button class="btn-ghost" id="btnImport">Restaurar archivo local</button>
@@ -425,7 +425,7 @@ export async function renderSettings(root) {
 
   /* Exportar JSON */
   root.querySelector("#btnExport").onclick = async () => {
-    const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes()]);
+    const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash()]);
     const payload = {
       format: "papelegruba-backup",
       version: 3,
@@ -451,7 +451,7 @@ export async function renderSettings(root) {
       await initGoogle();
       await requestToken();
       const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes()]);
-      const payload = { format: "papelegruba-backup", version: 3, exportedAt: new Date().toISOString(), tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes };
+      const payload = { format: "papelegruba-backup", version: 3, exportedAt: new Date().toISOString(), tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash };
       const file = await uploadBackupToDrive(payload);
       localMsg.textContent = "Copia guardada en Google Drive: " + (file.name || "Papelegruba");
       await refreshDriveBackups();
