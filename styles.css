@@ -1255,3 +1255,18 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 500; }
 
 /* Tareas editables dentro de Proyectos */
 .project-task-toggle,.project-task-edit{border:0;background:transparent;color:inherit;cursor:pointer;font:inherit;padding:.15rem .25rem;text-align:left;min-width:0}.project-task-toggle{font-size:1rem;border-radius:6px}.project-task-toggle:focus-visible,.project-task-edit:focus-visible{outline:2px solid var(--c-lavender-dk);outline-offset:2px}.project-task-edit{display:flex;flex-direction:column;gap:.15rem;overflow-wrap:anywhere}.project-task-edit small{color:var(--c-ink-soft);font-size:.72rem}.project-task-edit:hover span{text-decoration:underline}
+
+
+/* ============ Saldo de horas: positivo a favor, negativo por trabajar ============ */
+.hours-positive {
+  color: #218447 !important;
+}
+.hours-negative {
+  color: #C62828 !important;
+}
+.hours-balance-help {
+  margin: -.25rem 0 .9rem;
+  color: var(--c-ink-soft);
+  font-size: .8rem;
+  line-height: 1.45;
+}
