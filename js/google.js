@@ -305,25 +305,47 @@ async function driveFetch(url, init = {}) {
 }
 
 export async function uploadBackupToDrive(payload) {
-  const boundary = "papelegruba_backup_boundary";
-  const date = new Date().toISOString().slice(0, 10);
-  const metadata = {
-    name: `papelegruba-backup-${date}.json`,
-    mimeType: "application/json",
-    description: "Copia de seguridad completa de Papelegruba"
-  };
-  const body =
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-    JSON.stringify(metadata) +
-    `\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
-    JSON.stringify(payload, null, 2) +
-    `\r\n--${boundary}--`;
-  const response = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,createdTime,size,webViewLink`, {
-    method: "POST",
-    headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
-    body
-  });
-  return response.json();
+  // Una única copia viva: cada guardado reemplaza la anterior en vez de crear otra por fecha.
+  const latestName = "papelegruba-backup-latest.json";
+  const files = await listBackupsOnDrive();
+  const latest = files.find(file => file.name === latestName);
+  const body = JSON.stringify({ ...payload, exportedAt: new Date().toISOString() }, null, 2);
+  let saved;
+  if (latest) {
+    const response = await driveFetch(`${DRIVE_UPLOAD_API}/files/${encodeURIComponent(latest.id)}?uploadType=media`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body
+    });
+    saved = { ...(await response.json().catch(() => ({}))), id: latest.id, name: latestName };
+  } else {
+    const boundary = "papelegruba_backup_boundary";
+    const metadata = {
+      name: latestName,
+      mimeType: "application/json",
+      description: "Última copia automática completa de Papelegruba"
+    };
+    const multipart = `--${boundary}\\r\\nContent-Type: application/json; charset=UTF-8\\r\\n\\r\\n` +
+      JSON.stringify(metadata) +
+      `\\r\\n--${boundary}\\r\\nContent-Type: application/json; charset=UTF-8\\r\\n\\r\\n` +
+      body + `\\r\\n--${boundary}--`;
+    const response = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,createdTime,size,webViewLink`, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+      body: multipart
+    });
+    saved = await response.json();
+  }
+  // Limpiar las copias antiguas solo después de guardar correctamente la nueva copia.
+  const oldFiles = files.filter(file => file.id !== saved.id);
+  for (const old of oldFiles) {
+    await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(old.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trashed: true })
+    });
+  }
+  return saved;
 }
 
 export async function listBackupsOnDrive() {
