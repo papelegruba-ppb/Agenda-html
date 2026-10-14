@@ -428,9 +428,9 @@ export async function renderSettings(root) {
     const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash()]);
     const payload = {
       format: "papelegruba-backup",
-      version: 3,
+      version: 4,
       exportedAt: new Date().toISOString(),
-      tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes
+      tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash
     };
     const blob = new Blob(
       [JSON.stringify(payload, null, 2)],
@@ -450,7 +450,7 @@ export async function renderSettings(root) {
     try {
       await initGoogle();
       await requestToken();
-      const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes()]);
+      const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash()]);
       const payload = { format: "papelegruba-backup", version: 3, exportedAt: new Date().toISOString(), tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash };
       const file = await uploadBackupToDrive(payload);
       localMsg.textContent = "Copia guardada en Google Drive: " + (file.name || "Papelegruba");
