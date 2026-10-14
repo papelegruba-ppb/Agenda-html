@@ -166,7 +166,7 @@ export async function openTaskForm(task = null, onSaved) {
     const medOnly = bodyEl.querySelector(".med-only");
     if (medOnly) medOnly.style.display = catId === "medical" ? "" : "none";
     const medRow = bodyEl.querySelector(".med-only-hidden");
-    if (medRow) medRow.style.display = catId === "medical" ? "" : "none";
+    if (medRow) medRow.style.display = catId === "medical" ? "" : "none";\n    const clientFields = bodyEl.querySelector(".client-extra-fields");\n    if (clientFields) clientFields.style.display = catId === "extra-client" ? "" : "none";
   });
 
   const initialCat = t.type || "personal";
