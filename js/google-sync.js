@@ -1,4 +1,4 @@
-import { getAllTasks, addTask, updateTask, deleteTask, getSetting, setSetting } from "./db.js";
+import { getAllTasks, addTask, updateTask, deleteTask, deleteTaskLocalOnly, getSetting, setSetting } from "./db.js";
 import {
   initGoogle, requestToken, isConnected, importAllEvents, gcalEventToTask,
   listGoogleTasks, createGoogleTask, updateGoogleTask, deleteGoogleTask,
@@ -103,7 +103,7 @@ async function flushDeletionQueue() {
 async function syncChecklistTasks(localTasks, remoteTasks) {
   const byRemoteId = new Map(remoteTasks.map(task => [task.id, task]));
   const localByRemoteId = new Map(localTasks.filter(t => t.gtaskId).map(t => [t.gtaskId, t]));
-  const remoteLive = remoteTasks.filter(t => !t.deleted);
+  // Solo sincronizamos tareas abiertas. Las completadas/cerradas en Google Tasks\n  // no se importan ni se vuelven a crear en la agenda.\n  const remoteLive = remoteTasks.filter(t => !t.deleted && t.status !== "completed");\n\n  // Si la base local contiene varias copias enlazadas al mismo ID remoto,\n  // conservamos una sola (la más recientemente actualizada) y eliminamos\n  // las copias locales sin emitir eventos que borren la tarea de Google.\n  const linkedGroups = new Map();\n  for (const item of localTasks.filter(t => t.gtaskId)) {\n    if (!linkedGroups.has(item.gtaskId)) linkedGroups.set(item.gtaskId, []);\n    linkedGroups.get(item.gtaskId).push(item);\n  }\n  for (const copies of linkedGroups.values()) {\n    if (copies.length < 2) continue;\n    copies.sort((a, b) => timestamp(b.updatedAt) - timestamp(a.updatedAt));\n    for (const duplicate of copies.slice(1)) {\n      await deleteTaskLocalOnly(duplicate.id);\n    }\n  }
 
   // Aplicar cambios hechos en Google Tasks y retirar las tareas eliminadas allí.
   for (const remote of remoteTasks) {
@@ -135,7 +135,7 @@ async function syncChecklistTasks(localTasks, remoteTasks) {
     }
   }
 
-  const localIds = new Set(localTasks.filter(t => t.gtaskId).map(t => t.gtaskId));
+  const dedupedLocalTasks = localTasks.filter(t => {\n    if (!t.gtaskId) return true;\n    const copies = linkedGroups.get(t.gtaskId) || [];\n    return !copies.length || copies[0].id === t.id;\n  });\n  const localIds = new Set(dedupedLocalTasks.filter(t => t.gtaskId).map(t => t.gtaskId));
   // Importar tareas nuevas de Google Tasks sin duplicar por título/notas.
   for (const remote of remoteLive) {
     if (localIds.has(remote.id)) continue;
