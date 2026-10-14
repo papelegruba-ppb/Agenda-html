@@ -523,7 +523,7 @@ export async function renderSettings(root) {
         return;
       }
 
-      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes"];
+      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes", "trash"];
       const total = collections.reduce((sum, key) => sum + (Array.isArray(data[key]) ? data[key].length : 0), 0);
       if (!total) {
         localMsg.textContent = "⚠️ El archivo no contiene datos reconocibles.";
