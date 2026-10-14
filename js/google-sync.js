@@ -227,9 +227,9 @@ async function syncCalendar(localTasks) {
       continue;
     }
     if (remote.eventType === "birthday") {
-      // Los cumpleaños son eventos especiales de Google: quitarlos de la agenda local
-      // sin intentar borrarlos ni modificarlos en el calendario original.
-      await deleteTaskLocalOnly(local.id);
+      // Mantener los cumpleaños visibles solo en las vistas de calendario.
+      // Nunca editarlos, convertirlos en horas/checklist ni borrarlos de Google.
+      await saveLocal(local, { calendarOnly: true, isChecklist: false, type: "personal", gcalEventType: "birthday", gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso() });
       continue;
     }
     const localChanged = timestamp(local.updatedAt) > timestamp(local.gcalSyncedAt);
@@ -275,7 +275,7 @@ async function syncCalendar(localTasks) {
   // título/fecha/hora, vincularlos en vez de crear una copia duplicada.
   const refreshed = await getAllTasks();
   const knownIds = new Set(refreshed.filter(t => t.gcalEventId).map(t => t.gcalEventId));
-  for (const local of refreshed.filter(t => !isChecklist(t) && t.date && !t.gcalEventId)) {
+  for (const local of refreshed.filter(t => !t.calendarOnly && !isChecklist(t) && t.date && !t.gcalEventId)) {
     const match = remoteFingerprints.get(eventFingerprint(local));
     if (match) {
       await saveLocal(local, { gcalEventId: match.id, gcalUpdated: match.updated || null, gcalSyncedAt: nowIso() });
