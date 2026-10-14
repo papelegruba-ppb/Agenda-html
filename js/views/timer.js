@@ -97,7 +97,7 @@ export async function renderTimer(root) {
 }
 
 async function renderClientExtras(root, allTasks, payments) {
-  const tasks = allTasks.filter(t => t.type === "extra-client" && t.isChecklist !== true);
+  const tasks = allTasks.filter(t => !t.calendarOnly && t.type === "extra-client" && t.isChecklist !== true);
   const taskAmount = t => Math.max(0, Number(t.tramiteAmount ?? t.amount ?? 0));
   const paidByTask = new Map();
   for (const p of payments) {
