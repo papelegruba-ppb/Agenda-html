@@ -438,7 +438,7 @@ export async function mergeBackupData(data) {
       if (name === "settings" ? typeof item.key !== "string" : (item.id == null || item.id === "")) continue;
       t.objectStore(name).put(item); count++;
     }
-    t.oncomplete = () => resolve(count);
+    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "restore" } })); } catch (_) {} resolve(count); };
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error || new Error("No se pudo restaurar el respaldo"));
   });
