@@ -15,6 +15,7 @@ import {
   downloadBackupFromDrive
 } from "../google.js";
 import { syncGoogleData } from "../google-sync.js";
+import { getActiveTimer } from "../hours.js";
 
 export async function renderSettings(root) {
   const clientId = (await getSetting("googleClientId")) || GOOGLE_CLIENT_ID;
@@ -430,6 +431,7 @@ export async function renderSettings(root) {
       format: "papelegruba-backup",
       version: 4,
       exportedAt: new Date().toISOString(),
+      activeTimer: getActiveTimer(),
       tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash
     };
     const blob = new Blob(
@@ -451,7 +453,7 @@ export async function renderSettings(root) {
       await initGoogle();
       await requestToken();
       const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash()]);
-      const payload = { format: "papelegruba-backup", version: 4, exportedAt: new Date().toISOString(), tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash };
+      const payload = { format: "papelegruba-backup", version: 4, exportedAt: new Date().toISOString(), activeTimer: getActiveTimer(), tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash };
       const file = await uploadBackupToDrive(payload);
       localMsg.textContent = "Copia guardada en Google Drive: " + (file.name || "Papelegruba");
       await refreshDriveBackups();
@@ -492,10 +494,11 @@ export async function renderSettings(root) {
       const raw = await downloadBackupFromDrive(fileId);
       const data = JSON.parse(raw);
       if (data.format !== "papelegruba-backup") throw new Error("El archivo no es una copia de Papelegruba.");
-      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes"];
+      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes", "trash"];
       const total = collections.reduce((sum, key) => sum + (Array.isArray(data[key]) ? data[key].length : 0), 0);
       if (!total) throw new Error("La copia no contiene datos reconocibles.");
       const count = await mergeBackupData(data);
+      restoreTimerFromBackup(data);
       localMsg.textContent = "Restauración completada: " + count + " registros procesados. No se han borrado datos.";
     } catch (e) { localMsg.textContent = "Error restaurando desde Drive: " + (e.message || e); }
   };
@@ -532,6 +535,7 @@ export async function renderSettings(root) {
       }
       try {
         const count = await mergeBackupData(data);
+        restoreTimerFromBackup(data);
         localMsg.textContent = `✅ Restauración completada: ${count} registros procesados. Los datos existentes no se han borrado.`;
       } catch (e) {
         localMsg.textContent = "❌ Error restaurando el respaldo: " + (e.message || e);
@@ -542,6 +546,13 @@ export async function renderSettings(root) {
 
     inp.click();
   };
+}
+
+function restoreTimerFromBackup(data) {
+  if (!Object.prototype.hasOwnProperty.call(data || {}, "activeTimer")) return;
+  const timer = data.activeTimer;
+  localStorage.setItem("papelegruba-timer-active", timer && typeof timer === "object" && timer.startedAt ? JSON.stringify(timer) : "null");
+  window.dispatchEvent(new CustomEvent("papelegruba:timer-sync"));
 }
 
 function escapeAttr(s) { return (s || "").replace(/"/g, "&quot;"); }
