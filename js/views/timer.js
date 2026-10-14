@@ -25,11 +25,6 @@ export async function renderTimer(root) {
   const catSessions = sessions.filter(s => s.categoryId === currentCategory);
   const catPayments = payments.filter(p => p.categoryId === currentCategory);
   const totals = computeTotals(catSessions, catPayments, currentCategory);
-  if (currentCategory === "extra-client") {
-    renderClientExtras(root, allTasks, catPayments);
-    root.querySelectorAll(".hours-cat-chip").forEach(chip => chip.onclick = () => { currentCategory = chip.dataset.cat; renderTimer(root); });
-    return;
-  }
 
   root.innerHTML = `
     <div class="hours-view">
@@ -69,6 +64,12 @@ export async function renderTimer(root) {
       </div>
       <div class="hours-history" id="hoursHistory">${renderHistory(catSessions)}</div>
     </div>`;
+
+  if (currentCategory === "extra-client") {
+    renderClientExtras(root, allTasks, catPayments);
+    root.querySelectorAll(".hours-cat-chip").forEach(chip => chip.onclick = () => { currentCategory = chip.dataset.cat; renderTimer(root); });
+    return;
+  }
 
   root.querySelectorAll(".hours-cat-chip").forEach(chip => chip.onclick = () => { currentCategory = chip.dataset.cat; renderTimer(root); });
   root.querySelector("#btnStart")?.addEventListener("click", () => { startTimer({ categoryId: currentCategory }); renderTimer(root); });
