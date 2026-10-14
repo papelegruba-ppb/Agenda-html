@@ -110,7 +110,7 @@ async function renderClientExtras(root, allTasks, payments) {
     <div class="hours-card" role="button" tabindex="0" id="showClientPending" style="cursor:pointer">
       <div class="hours-card-label">Pendiente de cobro · Ver trámites</div>
       <div class="hours-card-value ${pending > 0 ? "hours-positive" : ""}">${pending.toFixed(2)} €</div>
-      <div class="hours-card-sub hours-neutral">${tasks.filter(t => taskAmount(t) > (paidByTask.get(t.id) || 0)).length} trámites pendientes</div>
+      <div class="hours-card-sub hours-neutral">${tasks.filter(t => taskAmount(t) <= 0 || taskAmount(t) > (paidByTask.get(t.id) || 0)).length} trámites pendientes</div>
     </div>
     <div class="hours-card" role="button" tabindex="0" id="showClientPaid" style="cursor:pointer">
       <div class="hours-card-label">Cobrado · Ver cobros</div>
@@ -124,15 +124,19 @@ async function renderClientExtras(root, allTasks, payments) {
   if (actions) actions.innerHTML = '<button class="btn-primary" id="addClientTask">+ Nuevo trámite</button><button class="btn-ghost" id="addClientPayment">+ Registrar cobro</button>';
   const history = root.querySelector("#hoursHistory");
   if (history) history.innerHTML = `
+    <section id="clientTasksSection">
     <h3 class="hours-month-label">Trámites</h3>
     ${tasks.length ? tasks.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(t => {
       const amount = taskAmount(t), paid = Math.min(amount, paidByTask.get(t.id)||0), due = Math.max(0, amount-paid);
+      const status = amount <= 0 ? "Precio pendiente" : due > 0 ? "Pendiente" : "Cobrado";
       return `<div class="session-item client-tramite" data-task-id="${escapeAttr(t.id)}" style="cursor:pointer;border-left-color:#FF887C">
-        <div class="time-col"><strong>${escapeHtml(t.date||"Sin fecha")}</strong><span>${due > 0 ? "Pendiente" : "Cobrado"}</span></div>
+        <div class="time-col"><strong>${escapeHtml(t.date||"Sin fecha")}</strong><span>${status}</span></div>
         <div class="body-col"><div class="session-desc">${escapeHtml(t.title||"Trámite sin título")}</div><div class="session-meta">${escapeHtml(t.clientName||"Cliente sin indicar")} · ${paid.toFixed(2)} € cobrados de ${amount.toFixed(2)} €</div></div>
         <div class="amount-col ${due>0?"hours-positive":""}">${due.toFixed(2)} €</div>
       </div>`;
     }).join("") : '<p class="empty">Todavía no has registrado trámites. Pulsa «Nuevo trámite» para empezar.</p>'}
+    </section>
+    <section id="clientPaymentsSection">
     <h3 class="hours-month-label">Cobros registrados</h3>
     ${payments.length ? payments.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(p => {
       const linked = tasks.find(t=>t.id===p.taskId);
@@ -141,7 +145,8 @@ async function renderClientExtras(root, allTasks, payments) {
         <div class="body-col"><div class="session-desc">${escapeHtml(linked ? linked.title : (p.note||"Cobro sin trámite vinculado"))}</div><div class="session-meta">${linked ? "Trámite vinculado" : "Sin vincular a un trámite"} · Pulsa para editar</div></div>
         <div class="amount-col hours-positive">+${Number(p.amount||0).toFixed(2)} €</div>
       </div>`;
-    }).join("") : '<p class="empty">Todavía no hay cobros registrados.</p>'}`;
+    }).join("") : '<p class="empty">Todavía no hay cobros registrados.</p>'}
+    </section>`;
   root.querySelector("#addClientTask")?.addEventListener("click", () => openTaskForm({ type:"extra-client", isChecklist:false, date:new Date().toISOString().slice(0,10) }, () => renderTimer(root)));
   root.querySelector("#addClientPayment")?.addEventListener("click", () => openPaymentForm({ categoryId:"extra-client" }, () => renderTimer(root)));
   root.querySelectorAll(".client-tramite").forEach(el => el.onclick = () => {
