@@ -59,7 +59,7 @@ export async function renderDay(root) {
       li.querySelector(".task-check")?.remove();
       li.querySelector(".task-delete")?.remove();
       li.onclick = () => {};
-      continue;
+      return;
     }
 
     li.querySelector(".task-check")?.addEventListener("click", async (e) => {
