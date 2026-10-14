@@ -17,12 +17,14 @@ export function startTimer({ categoryId = null, taskId = null, taskTitle = null 
     taskTitle
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(timer));
+  try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "activeTimer" } })); } catch (_) {}
   notify();
   return timer;
 }
 
 export function stopTimer() {
   localStorage.removeItem(STORAGE_KEY);
+  try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "activeTimer" } })); } catch (_) {}
   notify();
   return null;
 }
