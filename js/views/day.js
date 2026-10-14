@@ -54,6 +54,14 @@ export async function renderDay(root) {
   root.querySelectorAll(".task-item").forEach(li => {
     const id = li.dataset.taskId;
 
+    if (tasks.find(t => t.id === id)?.calendarOnly) {
+      li.classList.add("calendar-only-event");
+      li.querySelector(".task-check")?.remove();
+      li.querySelector(".task-delete")?.remove();
+      li.onclick = () => {};
+      continue;
+    }
+
     li.querySelector(".task-check")?.addEventListener("click", async (e) => {
       e.stopPropagation();
       const done = li.classList.toggle("done");
