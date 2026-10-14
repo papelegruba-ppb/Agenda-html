@@ -68,6 +68,13 @@ export async function renderWeek(root) {
 
   // Click en tarea → abrir formulario
   root.querySelectorAll(".week-day-list .task-item").forEach(li => {
+    const item = tasks.find(t => t.id === li.dataset.taskId);
+    if (item?.calendarOnly) {
+      li.classList.add("calendar-only-event");
+      li.querySelector(".task-delete")?.remove();
+      li.onclick = () => {};
+      return;
+    }
     li.onclick = (e) => {
       if (e.target.closest(".task-delete")) return;
       e.stopPropagation();
