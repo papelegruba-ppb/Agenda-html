@@ -1,6 +1,6 @@
 import { openModal } from "./modal.js";
 import { renderCategoryPicker, bindCategoryPicker, getSelectedCategory } from "./category-picker.js";
-import { addTask, updateTask, getAllProjects } from "../db.js";
+import { addTask, updateTask, deleteTask, deleteTaskLocalOnly, getAllProjects } from "../db.js";
 import { iso } from "../dates.js";
 import { startTimer, getActiveTimer, stopTimer } from "../hours.js";
 
@@ -116,6 +116,21 @@ export async function openTaskForm(task = null, onSaved) {
   const actions = [
     { label: "Cancelar", onClick: ({ close }) => close() }
   ];
+
+  // Toda tarea existente se puede borrar desde cualquier categoría de Horas.
+  if (isEdit) {
+    actions.push({
+      label: "Borrar tarea",
+      onClick: async ({ close }) => {
+        if (!confirm("¿Borrar esta tarea de la Agenda?")) return;
+        // Los cumpleaños de Google son de solo lectura para esta app: borrar solo la copia local.
+        if (t.gcalEventType === "birthday") await deleteTaskLocalOnly(t.id);
+        else await deleteTask(t.id);
+        close();
+        onSaved?.();
+      }
+    });
+  }
 
   // Botón "Empezar a contar" solo si la tarea ya existe (isEdit)
   if (isEdit) {
