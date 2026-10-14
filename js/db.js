@@ -261,7 +261,7 @@ export async function updateSession(id, patch) {
     req.onsuccess = () => {
       const merged = { ...req.result, ...patch };
       s.put(merged);
-      t.oncomplete = () => resolve(merged);
+      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "sessions" } })); } catch (_) {} resolve(merged); };
     };
     req.onerror = () => reject(req.error);
   });
@@ -314,14 +314,16 @@ export async function updatePayment(id, patch) {
     req.onsuccess = () => {
       const merged = { ...req.result, ...patch };
       s.put(merged);
-      t.oncomplete = () => resolve(merged);
+      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "payments" } })); } catch (_) {} resolve(merged); };
     };
     req.onerror = () => reject(req.error);
   });
 }
 
 export async function deletePayment(id) {
-  return tx("payments", "readwrite", s => s.delete(id));
+  const all = await getAllPayments();
+  const item = all.find(x => x.id === id);
+  if (item) await moveToTrash("payments", item);
 }
 
 export async function getAllPayments() {
@@ -362,7 +364,7 @@ export async function updateHabit(id, patch) {
       if (!req.result) { reject(new Error(`No existe el hábito ${id}`)); return; }
       const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
       store.put(merged);
-      t.oncomplete = () => resolve(merged);
+      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "habits" } })); } catch (_) {} resolve(merged); };
     };
     req.onerror = () => reject(req.error);
     t.onerror = () => reject(t.error);
@@ -406,7 +408,7 @@ export async function convertTaskToHabit(taskId) {
       allReq.onerror = () => { failure = allReq.error; t.abort(); };
     };
     req.onerror = () => { failure = req.error; t.abort(); };
-    t.oncomplete = () => resolve(result);
+    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "habits" } })); } catch (_) {} resolve(result); };
     t.onabort = () => reject(failure || t.error || new Error("No se pudo convertir la tarea en hábito"));
     t.onerror = () => reject(failure || t.error);
   });
@@ -545,7 +547,7 @@ export async function updateHealthEpisode(id, patch) {
       if (!req.result) { reject(new Error("No se encuentra el episodio")); return; }
       const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
       s.put(merged);
-      t.oncomplete = () => resolve(merged);
+      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "healthEpisodes" } })); } catch (_) {} resolve(merged); };
     };
     req.onerror = () => reject(req.error);
     t.onerror = () => reject(t.error);
@@ -595,7 +597,7 @@ export async function updateMedicationIntake(id, patch) {
       if (!req.result) { reject(new Error("No se encuentra la toma")); return; }
       const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
       s.put(merged);
-      t.oncomplete = () => resolve(merged);
+      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "medicationIntakes" } })); } catch (_) {} resolve(merged); };
     };
     req.onerror = () => reject(req.error);
     t.onerror = () => reject(t.error);
