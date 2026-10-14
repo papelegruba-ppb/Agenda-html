@@ -114,6 +114,13 @@ export async function renderSettings(root) {
 
   const msg = root.querySelector("#gcalMsg");
   const localMsg = root.querySelector("#localMsg");
+  window.addEventListener("papelegruba:backup-status", event => {
+    if (!localMsg) return;
+    const status = event.detail || {};
+    localMsg.textContent = status.ok
+      ? "Copia automática actualizada en Google Drive: " + new Date(status.at || Date.now()).toLocaleString("es-ES")
+      : "Copia automática pendiente: " + (status.message || "vuelve a autorizar Google Drive desde «Guardar backup en Google Drive». Los cambios siguen guardados localmente.");
+  });
   let driveSyncPlan = null;
   const driveSyncMsg = root.querySelector("#driveSyncMsg");
   const driveSyncReview = root.querySelector("#driveSyncReview");
