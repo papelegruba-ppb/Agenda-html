@@ -2,7 +2,7 @@ import { GOOGLE_CLIENT_ID } from "../config.js";
 import { getActiveTimer } from "./hours.js";
 import {
   getAllTasks, getAllHabits, getAllProjects, getAllNotes, getAllSessions,
-  getAllPayments, getAllHealthEpisodes, getAllMedicationIntakes, getAllSettings,
+  getAllPayments, getAllHealthEpisodes, getAllMedicationIntakes, getAllSettings, getTrash,
   getSetting, setSetting, mergeBackupData
 } from "./db.js";
 
@@ -10,7 +10,7 @@ const SCOPE = "https://www.googleapis.com/auth/drive.appdata openid email profil
 const FILE_NAME = "papelegruba-sync-v1.json";
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const UPLOAD = "https://www.googleapis.com/upload/drive/v3";
-const COLLECTIONS = ["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes", "appState"];
+const COLLECTIONS = ["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes", "trash", "appState"];
 let tokenClient = null;
 let accessToken = null;
 let expiresAt = 0;
@@ -138,9 +138,9 @@ async function readRemote() {
 }
 
 async function readLocal() {
-  const [tasks, habits, projects, notes, sessions, payments, healthEpisodes, medicationIntakes, openingBalance] = await Promise.all([
+  const [tasks, habits, projects, notes, sessions, payments, healthEpisodes, medicationIntakes, trash, openingBalance] = await Promise.all([
     getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(),
-    getAllPayments(), getAllHealthEpisodes(), getAllMedicationIntakes(),
+    getAllPayments(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash(),
     getSetting("papelegruba-hours-opening-balance-v1-work-sye")
   ]);
   // El cronómetro activo se guarda en localStorage, no en IndexedDB: se añade explícitamente a Drive.
@@ -148,7 +148,7 @@ async function readLocal() {
     { id: "activeTimer", value: getActiveTimer() },
     { id: "hoursOpeningBalance", value: openingBalance }
   ];
-  return { tasks, habits, projects, notes, sessions, payments, healthEpisodes, medicationIntakes, appState };
+  return { tasks, habits, projects, notes, sessions, payments, healthEpisodes, medicationIntakes, trash, appState };
 }
 
 function stable(value) {
