@@ -1,4 +1,4 @@
-import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes, updateTask, deleteTask, deleteTaskLocalOnly } from "../db.js";
+import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes, updateTask, deleteTask, deleteTaskLocalOnly, getTrash, restoreTrashItem, permanentlyDeleteTrashItem } from "../db.js";
 import { GOOGLE_CLIENT_ID } from "../../config.js";
 import { connectDriveSync, getDriveSyncAccount, disconnectDriveSync, previewDriveSync, applyDriveSync, downloadConflictReport } from "../drive-sync.js";
 import {
@@ -87,6 +87,13 @@ export async function renderSettings(root) {
         </label>
         <button class="btn-ghost" id="btnDriveRestore">Restaurar copia seleccionada de Drive</button>
         <p class="hint small" id="localMsg">La copia local se descarga como JSON. Drive requiere autorizar el acceso a archivos creados por Papelegruba.</p>
+      </section>
+
+      <section class="settings-block">
+        <h3>Papelera · últimos 7 días</h3>
+        <p class="hint">Los registros eliminados se conservan durante 7 días y después se eliminan definitivamente. Puedes recuperarlos antes de que caduquen.</p>
+        <div class="gcal-actions"><button class="btn-ghost" id="btnShowTrash">Ver eliminados recientes</button></div>
+        <div id="trashReview"></div>
       </section>
 
       <section class="settings-block">
@@ -372,6 +379,42 @@ export async function renderSettings(root) {
       });
     } catch (e) { panel.textContent = "No se pudieron revisar los duplicados: " + (e.message || e); }
   });
+  root.querySelector("#btnShowTrash")?.addEventListener("click", refreshTrash);
+  async function refreshTrash() {
+    const panel = root.querySelector("#trashReview");
+    if (!panel) return;
+    panel.textContent = "Cargando papelera…";
+    try {
+      const items = await getTrash();
+      if (!items.length) {
+        panel.innerHTML = '<p class="hint small">La papelera está vacía.</p>';
+        return;
+      }
+      panel.innerHTML = items.map(item => {
+        const title = item.record?.title || item.record?.name || item.record?.medication || item.record?.description || item.collection;
+        const expires = item.expiresAt ? new Date(item.expiresAt).toLocaleString("es-ES") : "en 7 días";
+        return `<article class="duplicate-item" data-trash-id="${escapeAttr(item.id)}" style="display:flex;justify-content:space-between;gap:.75rem;align-items:center;padding:.6rem 0;border-bottom:1px solid var(--c-border)">
+          <div><strong>${escapeHtml(title)}</strong><small style="display:block">${escapeHtml(item.collection)} · caduca: ${escapeHtml(expires)}</small></div>
+          <div class="gcal-actions"><button class="btn-ghost trash-restore">Recuperar</button><button class="btn-ghost trash-delete">Eliminar definitivamente</button></div>
+        </article>`;
+      }).join("");
+      panel.querySelectorAll(".trash-restore").forEach(button => button.addEventListener("click", async () => {
+        const item = button.closest("[data-trash-id]");
+        try {
+          const ok = await restoreTrashItem(item.dataset.trashId);
+          if (!ok) alert("Ese registro ya ha caducado y no se puede recuperar.");
+          await refreshTrash();
+        } catch (error) { alert("No se pudo recuperar: " + (error.message || error)); }
+      }));
+      panel.querySelectorAll(".trash-delete").forEach(button => button.addEventListener("click", async () => {
+        const item = button.closest("[data-trash-id]");
+        if (!confirm("¿Eliminar definitivamente este registro? No se podrá recuperar.")) return;
+        await permanentlyDeleteTrashItem(item.dataset.trashId);
+        await refreshTrash();
+      }));
+    } catch (error) { panel.textContent = "No se pudo abrir la papelera: " + (error.message || error); }
+  }
+
   /* Guardar Client ID */
   root.querySelector("#saveClientId").addEventListener("click", async () => {
     const v = root.querySelector("#clientId").value.trim();
