@@ -76,7 +76,8 @@ export async function openPaymentForm(payment, onSaved) {
         }
         close();
         onSaved?.();
-      }}
+      }},
+      ...(isEdit ? [{ label: "Borrar", onClick: async ({ close }) => { if (!confirm("¿Borrar este cobro?")) return; await deletePayment(payment.id); close(); onSaved?.(); } }] : [])
     ]
   });
 }
