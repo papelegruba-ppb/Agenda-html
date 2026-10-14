@@ -1,4 +1,5 @@
 import { GOOGLE_CLIENT_ID } from "../config.js";
+import { getActiveTimer } from "./hours.js";
 import {
   getAllTasks, getAllHabits, getAllProjects, getAllNotes, getAllSessions,
   getAllPayments, getAllHealthEpisodes, getAllMedicationIntakes, getAllSettings,
@@ -9,7 +10,7 @@ const SCOPE = "https://www.googleapis.com/auth/drive.appdata openid email profil
 const FILE_NAME = "papelegruba-sync-v1.json";
 const DRIVE = "https://www.googleapis.com/drive/v3";
 const UPLOAD = "https://www.googleapis.com/upload/drive/v3";
-const COLLECTIONS = ["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes"];
+const COLLECTIONS = ["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes", "appState"];
 let tokenClient = null;
 let accessToken = null;
 let expiresAt = 0;
@@ -135,11 +136,17 @@ async function readRemote() {
 }
 
 async function readLocal() {
-  const [tasks, habits, projects, notes, sessions, payments, healthEpisodes, medicationIntakes] = await Promise.all([
+  const [tasks, habits, projects, notes, sessions, payments, healthEpisodes, medicationIntakes, openingBalance] = await Promise.all([
     getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(),
-    getAllPayments(), getAllHealthEpisodes(), getAllMedicationIntakes()
+    getAllPayments(), getAllHealthEpisodes(), getAllMedicationIntakes(),
+    getSetting("papelegruba-hours-opening-balance-v1-work-sye")
   ]);
-  return { tasks, habits, projects, notes, sessions, payments, healthEpisodes, medicationIntakes };
+  // El cronómetro activo se guarda en localStorage, no en IndexedDB: se añade explícitamente a Drive.
+  const appState = [
+    { id: "activeTimer", value: getActiveTimer() },
+    { id: "hoursOpeningBalance", value: openingBalance }
+  ];
+  return { tasks, habits, projects, notes, sessions, payments, healthEpisodes, medicationIntakes, appState };
 }
 
 function stable(value) {
@@ -257,6 +264,19 @@ export async function applyDriveSync(plan) {
     ...plan.merged,
     settings
   });
+  // Restaurar el cronómetro activo y el saldo inicial desde el estado sincronizado.
+  const appState = new Map((plan.merged.appState || []).map(item => [item.id, item.value]));
+  if (appState.has("activeTimer")) {
+    const activeTimer = appState.get("activeTimer");
+    localStorage.setItem("papelegruba-timer-active",
+      activeTimer && typeof activeTimer === "object" && activeTimer.startedAt
+        ? JSON.stringify(activeTimer)
+        : "null");
+    window.dispatchEvent(new CustomEvent("papelegruba:timer-sync"));
+  }
+  if (appState.has("hoursOpeningBalance")) {
+    await setSetting("papelegruba-hours-opening-balance-v1-work-sye", appState.get("hoursOpeningBalance"));
+  }
   await setSetting(`driveSyncBase:${plan.accountEmail}`, plan.merged);
   await setSetting("driveSyncLastAt", new Date().toISOString());
   return { updatedAt: new Date().toISOString() };
