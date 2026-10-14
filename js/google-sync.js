@@ -102,16 +102,43 @@ async function flushDeletionQueue() {
 
 async function syncChecklistTasks(localTasks, remoteTasks) {
   const byRemoteId = new Map(remoteTasks.map(task => [task.id, task]));
-  const localByRemoteId = new Map(localTasks.filter(t => t.gtaskId).map(t => [t.gtaskId, t]));
-  // Solo sincronizamos tareas abiertas. Las completadas/cerradas en Google Tasks\n  // no se importan ni se vuelven a crear en la agenda.\n  const remoteLive = remoteTasks.filter(t => !t.deleted && t.status !== "completed");\n\n  // Si la base local contiene varias copias enlazadas al mismo ID remoto,\n  // conservamos una sola (la más recientemente actualizada) y eliminamos\n  // las copias locales sin emitir eventos que borren la tarea de Google.\n  const linkedGroups = new Map();\n  for (const item of localTasks.filter(t => t.gtaskId)) {\n    if (!linkedGroups.has(item.gtaskId)) linkedGroups.set(item.gtaskId, []);\n    linkedGroups.get(item.gtaskId).push(item);\n  }\n  for (const copies of linkedGroups.values()) {\n    if (copies.length < 2) continue;\n    copies.sort((a, b) => timestamp(b.updatedAt) - timestamp(a.updatedAt));\n    for (const duplicate of copies.slice(1)) {\n      await deleteTaskLocalOnly(duplicate.id);\n    }\n  }
+  // Solo sincronizamos tareas abiertas. Las completadas/cerradas en Google Tasks
+  // no se importan ni se vuelven a crear en la agenda.
+  const remoteLive = remoteTasks.filter(t => !t.deleted && t.status !== "completed");
 
-  // Aplicar cambios hechos en Google Tasks y retirar las tareas eliminadas allí.
+  // Si la base local contiene varias copias enlazadas al mismo ID remoto,
+  // conservamos una sola (la más recientemente actualizada) y eliminamos
+  // las copias locales sin emitir eventos que borren la tarea de Google.
+  const linkedGroups = new Map();
+  for (const item of localTasks.filter(t => t.gtaskId)) {
+    if (!linkedGroups.has(item.gtaskId)) linkedGroups.set(item.gtaskId, []);
+    linkedGroups.get(item.gtaskId).push(item);
+  }
+  for (const copies of linkedGroups.values()) {
+    if (copies.length < 2) continue;
+    copies.sort((a, b) => timestamp(b.updatedAt) - timestamp(a.updatedAt));
+    for (const duplicate of copies.slice(1)) {
+      await deleteTaskLocalOnly(duplicate.id);
+    }
+  }
+
+  const dedupedLocalTasks = localTasks.filter(t => {
+    if (!t.gtaskId) return true;
+    const copies = linkedGroups.get(t.gtaskId) || [];
+    return !copies.length || copies[0].id === t.id;
+  });
+  const localByRemoteId = new Map(dedupedLocalTasks.filter(t => t.gtaskId).map(t => [t.gtaskId, t]));
+
+  // Aplicar cambios de Google Tasks. Las tareas completadas se retiran solo de la agenda.
   for (const remote of remoteTasks) {
     const local = localByRemoteId.get(remote.id);
     if (!local) continue;
-    if (remote.deleted) {
+    if (remote.deleted || remote.status === "completed") {
       applyingRemote = true;
-      try { await deleteTask(local.id); } finally { applyingRemote = false; }
+      try {
+        if (remote.deleted) await deleteTask(local.id);
+        else await deleteTaskLocalOnly(local.id);
+      } finally { applyingRemote = false; }
       continue;
     }
     const localChanged = !!local.gtaskSyncedAt && timestamp(local.updatedAt) > timestamp(local.gtaskSyncedAt);
@@ -135,7 +162,7 @@ async function syncChecklistTasks(localTasks, remoteTasks) {
     }
   }
 
-  const dedupedLocalTasks = localTasks.filter(t => {\n    if (!t.gtaskId) return true;\n    const copies = linkedGroups.get(t.gtaskId) || [];\n    return !copies.length || copies[0].id === t.id;\n  });\n  const localIds = new Set(dedupedLocalTasks.filter(t => t.gtaskId).map(t => t.gtaskId));
+  const localIds = new Set(dedupedLocalTasks.filter(t => t.gtaskId).map(t => t.gtaskId));
   // Importar tareas nuevas de Google Tasks sin duplicar por título/notas.
   for (const remote of remoteLive) {
     if (localIds.has(remote.id)) continue;
