@@ -3,7 +3,7 @@ function emitTaskChange(action, task) {
 }
 
 const DB_NAME = "papelegruba";
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 let dbPromise;
 
 export function initDB() {
@@ -32,6 +32,7 @@ export function initDB() {
       mk("habits");
       mk("healthEpisodes");
       mk("medicationIntakes");
+      mk("trash");
 
       if (!db.objectStoreNames.contains("sessions")) {
         const s = db.createObjectStore("sessions", { keyPath: "id" });
@@ -128,9 +129,8 @@ export async function updateTask(id, patch) {
 export async function deleteTask(id) {
   const all = await getAllTasks();
   const existing = all.find(task => task.id === id);
-  const result = await tx("tasks", "readwrite", s => s.delete(id));
+  if (existing) await moveToTrash("tasks", existing);
   if (existing) emitTaskChange("delete", existing);
-  return result;
 }
 
 // Eliminación estrictamente local para limpiar copias redundantes que comparten
@@ -263,7 +263,9 @@ export async function updateSession(id, patch) {
 }
 
 export async function deleteSession(id) {
-  return tx("sessions", "readwrite", s => s.delete(id));
+  const all = await getAllSessions();
+  const item = all.find(x => x.id === id);
+  if (item) await moveToTrash("sessions", item);
 }
 
 export async function getAllSessions() {
@@ -363,7 +365,9 @@ export async function updateHabit(id, patch) {
 }
 
 export async function deleteHabit(id) {
-  return tx("habits", "readwrite", s => s.delete(id));
+  const all = await getAllHabits();
+  const item = all.find(h => h.id === id);
+  if (item) await moveToTrash("habits", item);
 }
 
 /* Conversión idempotente: la comprobación y la escritura se realizan en una única
@@ -451,6 +455,65 @@ export async function getAllNotes() {
 }
 
 
+
+/* ============ PAPELERA (retención de 7 días) ============ */
+const TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+export async function moveToTrash(collection, record) {
+  const allowed = ["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes"];
+  if (!allowed.includes(collection) || !record || record.id == null) throw new Error("Registro no válido para la papelera.");
+  const now = new Date().toISOString();
+  const entry = { id: uid(), collection, recordId: record.id, record, deletedAt: now, expiresAt: new Date(Date.now() + TRASH_RETENTION_MS).toISOString() };
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction([collection, "trash"], "readwrite");
+    t.objectStore("trash").put(entry);
+    t.objectStore(collection).delete(record.id);
+    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "trash" } })); } catch (_) {} resolve(entry); };
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error("No se pudo mover el registro a la papelera."));
+  });
+}
+export async function getTrash() {
+  const db = await initDB();
+  const entries = await new Promise((resolve, reject) => {
+    const req = db.transaction("trash").objectStore("trash").getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+  const now = Date.now();
+  const valid = entries.filter(item => Date.parse(item.expiresAt || "") > now);
+  const expired = entries.filter(item => !valid.includes(item));
+  if (expired.length) await new Promise((resolve, reject) => {
+    const t = db.transaction("trash", "readwrite");
+    expired.forEach(item => t.objectStore("trash").delete(item.id));
+    t.oncomplete = resolve; t.onerror = () => reject(t.error);
+  });
+  return valid.sort((a,b) => String(b.deletedAt).localeCompare(String(a.deletedAt)));
+}
+export async function restoreTrashItem(trashId) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(["trash", "tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes"], "readwrite");
+    const trash = t.objectStore("trash");
+    const req = trash.get(trashId);
+    let restored = false;
+    req.onsuccess = () => {
+      const entry = req.result;
+      if (!entry || Date.parse(entry.expiresAt || "") <= Date.now()) { if (entry) trash.delete(trashId); return; }
+      if (!["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes"].includes(entry.collection)) return;
+      t.objectStore(entry.collection).put(entry.record);
+      trash.delete(trashId);
+      restored = true;
+    };
+    req.onerror = () => reject(req.error);
+    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "restore" } })); } catch (_) {} resolve(restored); };
+    t.onerror = () => reject(t.error);
+  });
+}
+export async function permanentlyDeleteTrashItem(trashId) {
+  return tx("trash", "readwrite", s => s.delete(trashId));
+}
+
 /* ============ CONTROL DE SALUD ============ */
 export async function getAllHealthEpisodes() {
   const db = await initDB();
@@ -483,6 +546,9 @@ export async function updateHealthEpisode(id, patch) {
   });
 }
 export async function deleteHealthEpisode(id) {
+  const allEpisodes = await getAllHealthEpisodes();
+  const episode = allEpisodes.find(item => item.id === id);
+  if (episode) await moveToTrash("healthEpisodes", episode);
   const db = await initDB();
   return new Promise((resolve, reject) => {
     const t = db.transaction(["healthEpisodes", "medicationIntakes"], "readwrite");
@@ -491,7 +557,7 @@ export async function deleteHealthEpisode(id) {
     const req = intakes.getAll();
     req.onsuccess = () => {
       req.result.filter(x => x.episodeId === id).forEach(x => intakes.put({ ...x, episodeId: null, updatedAt: new Date().toISOString() }));
-      episodes.delete(id);
+      if (!episode) episodes.delete(id);
     };
     req.onerror = () => { try { t.abort(); } catch {} reject(req.error); };
     t.oncomplete = () => resolve();
@@ -530,5 +596,7 @@ export async function updateMedicationIntake(id, patch) {
   });
 }
 export async function deleteMedicationIntake(id) {
-  return tx("medicationIntakes", "readwrite", s => s.delete(id));
+  const all = await getAllMedicationIntakes();
+  const item = all.find(x => x.id === id);
+  if (item) await moveToTrash("medicationIntakes", item);
 }
