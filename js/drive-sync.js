@@ -130,6 +130,8 @@ async function readRemote() {
     throw new Error("El archivo de appDataFolder no tiene un formato de sincronización reconocido. No se ha modificado.");
   }
   for (const name of COLLECTIONS) {
+    // Compatibilidad con backups anteriores a la sincronización del estado del cronómetro.
+    if (name === "appState" && envelope.collections[name] === undefined) envelope.collections[name] = [];
     if (!Array.isArray(envelope.collections[name])) throw new Error(`El archivo remoto está incompleto (${name}). No se ha modificado.`);
   }
   return { file, envelope, stamp: `${file.id}:${file.version || file.modifiedTime || envelope.updatedAt}` };
