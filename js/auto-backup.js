@@ -3,6 +3,7 @@ import {
   getAllPayments, getAllSettings, getAllHealthEpisodes, getAllMedicationIntakes, getTrash
 } from "./db.js";
 import { initGoogle, requestToken, uploadBackupToDrive } from "./google.js";
+import { getActiveTimer } from "./hours.js";
 
 let installed = false;
 let timer = null;
@@ -18,6 +19,7 @@ async function buildPayload() {
     format: "papelegruba-backup",
     version: 4,
     exportedAt: new Date().toISOString(),
+    activeTimer: getActiveTimer(),
     tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash
   };
 }
