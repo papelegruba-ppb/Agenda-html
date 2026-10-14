@@ -243,7 +243,7 @@ async function syncCalendar(localTasks) {
         title: mapped.title, notes: mapped.notes, date: mapped.date,
         time: mapped.time || "", endTime: mapped.endTime || "",
         allDay: mapped.allDay, type: mapped.type,
-        gcalEventType: remote.eventType || "default", gcalEventType: remote.eventType || "default", gcalEventType: remote.eventType || "default", gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso()
+        gcalEventType: remote.eventType || "default", gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso()
       });
     }
   }
@@ -260,13 +260,13 @@ async function syncCalendar(localTasks) {
         title: mapped.title, notes: mapped.notes, date: mapped.date,
         time: mapped.time || "", endTime: mapped.endTime || "", type: mapped.type,
         allDay: mapped.allDay, gcalEventId: remote.id,
-        gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso()
+        gcalEventType: remote.eventType || "default", gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso()
       });
       localIds.add(remote.id);
     } else {
       applyingRemote = true;
       try {
-        await addTask({ ...mapped, gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso() });
+        await addTask({ ...mapped, gcalEventType: remote.eventType || "default", gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso() });
       } finally { applyingRemote = false; }
     }
   }
