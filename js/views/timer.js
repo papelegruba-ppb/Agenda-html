@@ -1,8 +1,9 @@
-import { getAllSessions, getAllPayments, getSetting, setSetting } from "../db.js";
+import { getAllSessions, getAllPayments, getAllTasks, addTask, updateTask, updatePayment, deletePayment, getSetting, setSetting } from "../db.js";
 import { CATEGORIES, getCategory } from "../categories.js";
 import { getActiveTimer, startTimer, stopTimer, getElapsedMs, formatElapsed, onChange } from "../hours.js";
 import { openSessionForm } from "../ui/session-form.js";
 import { openPaymentForm } from "../ui/payment-form.js";
+import { openTaskForm } from "../ui/task-form.js";
 
 let currentCategory = "work-sye";
 let unsub = null;
@@ -15,7 +16,7 @@ const DEFAULT_RATE = 10;
 
 export async function renderTimer(root) {
   if (unsub) { unsub(); unsub = null; }
-  const [sessions, payments] = await Promise.all([getAllSessions(), getAllPayments()]);
+  const [sessions, payments, allTasks] = await Promise.all([getAllSessions(), getAllPayments(), getAllTasks()]);
   await ensureOpeningBalance(sessions, payments);
   await refreshOpeningBalanceCache();
 
@@ -64,6 +65,12 @@ export async function renderTimer(root) {
       <div class="hours-history" id="hoursHistory">${renderHistory(catSessions)}</div>
     </div>`;
 
+  if (currentCategory === "extra-client") {
+    renderClientExtras(root, allTasks, catPayments);
+    root.querySelectorAll(".hours-cat-chip").forEach(chip => chip.onclick = () => { currentCategory = chip.dataset.cat; renderTimer(root); });
+    return;
+  }
+
   root.querySelectorAll(".hours-cat-chip").forEach(chip => chip.onclick = () => { currentCategory = chip.dataset.cat; renderTimer(root); });
   root.querySelector("#btnStart")?.addEventListener("click", () => { startTimer({ categoryId: currentCategory }); renderTimer(root); });
   root.querySelector("#btnStop")?.addEventListener("click", () => {
@@ -86,6 +93,70 @@ export async function renderTimer(root) {
     const t = getActiveTimer();
     if (disp) disp.textContent = t ? formatElapsed(getElapsedMs()) : "00:00:00";
     if (hint) hint.textContent = t ? (t.taskTitle ? `En curso · ${t.taskTitle}` : "En curso · sin tarea asignada") : "Cronómetro detenido";
+  });
+}
+
+async function renderClientExtras(root, allTasks, payments) {
+  const tasks = allTasks.filter(t => t.type === "extra-client" && t.isChecklist !== true);
+  const taskAmount = t => Math.max(0, Number(t.tramiteAmount ?? t.amount ?? 0));
+  const paidByTask = new Map();
+  for (const p of payments) {
+    if (p.taskId) paidByTask.set(p.taskId, (paidByTask.get(p.taskId) || 0) + Math.max(0, Number(p.amount || 0)));
+  }
+  const pending = tasks.reduce((sum, t) => sum + Math.max(0, taskAmount(t) - Math.min(taskAmount(t), paidByTask.get(t.id) || 0)), 0);
+  const totalPaid = payments.reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0);
+  const unassigned = payments.filter(p => !p.taskId);
+  root.querySelector(".hours-summary").innerHTML = `
+    <div class="hours-card" role="button" tabindex="0" id="showClientPending" style="cursor:pointer">
+      <div class="hours-card-label">Pendiente de cobro · Ver trámites</div>
+      <div class="hours-card-value ${pending > 0 ? "hours-positive" : ""}">${pending.toFixed(2)} €</div>
+      <div class="hours-card-sub hours-neutral">${tasks.filter(t => taskAmount(t) > (paidByTask.get(t.id) || 0)).length} trámites pendientes</div>
+    </div>
+    <div class="hours-card" role="button" tabindex="0" id="showClientPaid" style="cursor:pointer">
+      <div class="hours-card-label">Cobrado · Ver cobros</div>
+      <div class="hours-card-value">${totalPaid.toFixed(2)} €</div>
+      <div class="hours-card-sub hours-neutral">${unassigned.length ? unassigned.length + " cobro(s) por vincular" : "Cobros registrados"}</div>
+    </div>`;
+  root.querySelector(".hours-balance-help")?.remove();
+  root.querySelector("#timerBox")?.remove();
+  root.querySelector("#btnStart")?.closest(".hours-timer")?.remove();
+  const actions = root.querySelector(".hours-actions-row");
+  if (actions) actions.innerHTML = '<button class="btn-primary" id="addClientTask">+ Nuevo trámite</button><button class="btn-ghost" id="addClientPayment">+ Registrar cobro</button>';
+  const history = root.querySelector("#hoursHistory");
+  if (history) history.innerHTML = `
+    <h3 class="hours-month-label">Trámites</h3>
+    ${tasks.length ? tasks.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(t => {
+      const amount = taskAmount(t), paid = Math.min(amount, paidByTask.get(t.id)||0), due = Math.max(0, amount-paid);
+      return `<div class="session-item client-tramite" data-task-id="${escapeAttr(t.id)}" style="cursor:pointer;border-left-color:#FF887C">
+        <div class="time-col"><strong>${escapeHtml(t.date||"Sin fecha")}</strong><span>${due > 0 ? "Pendiente" : "Cobrado"}</span></div>
+        <div class="body-col"><div class="session-desc">${escapeHtml(t.title||"Trámite sin título")}</div><div class="session-meta">${escapeHtml(t.clientName||"Cliente sin indicar")} · ${paid.toFixed(2)} € cobrados de ${amount.toFixed(2)} €</div></div>
+        <div class="amount-col ${due>0?"hours-positive":""}">${due.toFixed(2)} €</div>
+      </div>`;
+    }).join("") : '<p class="empty">Todavía no has registrado trámites. Pulsa «Nuevo trámite» para empezar.</p>'}
+    <h3 class="hours-month-label">Cobros registrados</h3>
+    ${payments.length ? payments.slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(p => {
+      const linked = tasks.find(t=>t.id===p.taskId);
+      return `<div class="session-item client-payment" data-payment-id="${escapeAttr(p.id)}" style="cursor:pointer;border-left-color:#237747">
+        <div class="time-col"><strong>${escapeHtml(p.date||"Sin fecha")}</strong><span>${escapeHtml(p.method||"")}</span></div>
+        <div class="body-col"><div class="session-desc">${escapeHtml(linked ? linked.title : (p.note||"Cobro sin trámite vinculado"))}</div><div class="session-meta">${linked ? "Trámite vinculado" : "Sin vincular a un trámite"} · Pulsa para editar</div></div>
+        <div class="amount-col hours-positive">+${Number(p.amount||0).toFixed(2)} €</div>
+      </div>`;
+    }).join("") : '<p class="empty">Todavía no hay cobros registrados.</p>'}`;
+  root.querySelector("#addClientTask")?.addEventListener("click", () => openTaskForm({ type:"extra-client", isChecklist:false, date:new Date().toISOString().slice(0,10) }, () => renderTimer(root)));
+  root.querySelector("#addClientPayment")?.addEventListener("click", () => openPaymentForm({ categoryId:"extra-client" }, () => renderTimer(root)));
+  root.querySelectorAll(".client-tramite").forEach(el => el.onclick = () => {
+    const t = tasks.find(x=>x.id===el.dataset.taskId);
+    if (t) openTaskForm(t, () => renderTimer(root));
+  });
+  root.querySelectorAll(".client-payment").forEach(el => el.onclick = () => {
+    const p = payments.find(x=>x.id===el.dataset.paymentId);
+    if (p) openPaymentForm(p, () => renderTimer(root));
+  });
+  root.querySelector("#showClientPending")?.addEventListener("click", () => {
+    root.querySelectorAll(".client-tramite").forEach(el => { el.style.display = el.querySelector(".amount-col")?.textContent.trim().startsWith("0.00") ? "none" : ""; });
+  });
+  root.querySelector("#showClientPaid")?.addEventListener("click", () => {
+    root.querySelectorAll(".client-payment").forEach(el => el.style.display = "");
   });
 }
 

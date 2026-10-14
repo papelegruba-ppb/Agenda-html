@@ -100,6 +100,15 @@ export async function openTaskForm(task = null, onSaved) {
         <textarea name="notes" rows="3" placeholder="Detalles, enlaces...">${escapeHtml(t.notes || "")}</textarea>
       </label>
 
+      <div class="client-extra-fields" style="display:${t.type === "extra-client" ? "" : "none"}">
+        <label>Cliente
+          <input name="clientName" value="${escapeAttr(t.clientName || "")}" placeholder="Nombre del cliente">
+        </label>
+        <label>Precio del trámite (€)
+          <input name="tramiteAmount" type="number" min="0" step="0.01" value="${Number(t.tramiteAmount ?? t.amount ?? 0)}" placeholder="0,00">
+        </label>
+      </div>
+
       ${MEDICAL_FIELDS}
     </form>
   `;
@@ -166,7 +175,7 @@ export async function openTaskForm(task = null, onSaved) {
     const medOnly = bodyEl.querySelector(".med-only");
     if (medOnly) medOnly.style.display = catId === "medical" ? "" : "none";
     const medRow = bodyEl.querySelector(".med-only-hidden");
-    if (medRow) medRow.style.display = catId === "medical" ? "" : "none";
+    if (medRow) medRow.style.display = catId === "medical" ? "" : "none";\n    const clientFields = bodyEl.querySelector(".client-extra-fields");\n    if (clientFields) clientFields.style.display = catId === "extra-client" ? "" : "none";
   });
 
   const initialCat = t.type || "personal";
@@ -174,6 +183,8 @@ export async function openTaskForm(task = null, onSaved) {
   const medRow = bodyEl.querySelector(".med-only-hidden");
   if (medOnly) medOnly.style.display = initialCat === "medical" ? "" : "none";
   if (medRow) medRow.style.display = initialCat === "medical" ? "" : "none";
+  const clientFields = bodyEl.querySelector(".client-extra-fields");
+  if (clientFields) clientFields.style.display = initialCat === "extra-client" ? "" : "none";
 
   if (t.specialty) bodyEl.querySelector('[name="specialty"]').value = t.specialty;
   if (t.doctor)    bodyEl.querySelector('[name="doctor"]').value = t.doctor;
@@ -252,6 +263,10 @@ function readTaskForm(root) {
     projectId: fd.get("projectId") || null,
     priority: 0
   };
+  if (cat === "extra-client") {
+    data.clientName = (fd.get("clientName") || "").toString().trim();
+    data.tramiteAmount = Math.max(0, Number(fd.get("tramiteAmount")) || 0);
+  }
   if (cat === "medical") {
     data.specialty = fd.get("specialty") || null;
     data.doctor = fd.get("doctor") || null;

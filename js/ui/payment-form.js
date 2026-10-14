@@ -1,8 +1,8 @@
 import { openModal } from "./modal.js";
-import { addPayment, deletePayment } from "../db.js";
+import { addPayment, updatePayment, deletePayment, getAllTasks } from "../db.js";
 import { CATEGORIES } from "../categories.js";
 
-export function openPaymentForm(payment, onSaved) {
+export async function openPaymentForm(payment, onSaved) {
   const isEdit = !!(payment && payment.id);
   const now = new Date();
 
@@ -15,6 +15,8 @@ export function openPaymentForm(payment, onSaved) {
   };
 
   const billableCats = CATEGORIES.filter(c => c.billable);
+  const isClientExtra = defaults.categoryId === "extra-client";
+  const clientTasks = isClientExtra ? (await getAllTasks()).filter(t => t.type === "extra-client" && t.isChecklist !== true) : [];
 
   const body = `
     <form class="payment-form" autocomplete="off">
@@ -34,6 +36,10 @@ export function openPaymentForm(payment, onSaved) {
           `).join("")}
         </select>
       </label>
+
+      ${isClientExtra ? `<label>Trámite asociado
+        <select name="taskId"><option value="">Sin vincular (podrás editarlo después)</option>${clientTasks.map(t => `<option value="${escapeAttr(t.id)}" ${t.id === payment?.taskId ? "selected" : ""}>${escapeHtml(t.title)} · ${Number(t.tramiteAmount ?? t.amount ?? 0).toFixed(2)} €</option>`).join("")}</select>
+      </label>` : ""}
 
       <label>Método
         <select name="method">
@@ -63,18 +69,21 @@ export function openPaymentForm(payment, onSaved) {
           amount: Number(fd.get("amount")) || 0,
           categoryId: fd.get("categoryId"),
           method: fd.get("method"),
-          note: (fd.get("note") || "").toString()
+          note: (fd.get("note") || "").toString(),
+          ...(isClientExtra ? { taskId: (fd.get("taskId") || "").toString() || null } : {})
         };
         if (isEdit) {
-          await addPayment({ ...data, id: payment.id });
+          await updatePayment(payment.id, data);
         } else {
           await addPayment(data);
         }
         close();
         onSaved?.();
-      }}
+      }},
+      ...(isEdit ? [{ label: "Borrar", onClick: async ({ close }) => { if (!confirm("¿Borrar este cobro?")) return; await deletePayment(payment.id); close(); onSaved?.(); } }] : [])
     ]
   });
 }
 
-function escapeAttr(s) { return (s || "").replace(/"/g, "&quot;"); }
+function escapeAttr(s) { return String(s || "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+function escapeHtml(s) { return String(s || "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
