@@ -12,6 +12,7 @@ import { renderMedical } from "./js/views/medical.js";
 import { renderHealth } from "./js/views/health.js";
 import { getActiveTimer, getElapsedMs, formatElapsed, onChange } from "./js/hours.js";
 import { trySyncOnOpen, installGoogleSyncListeners } from "./js/google-sync.js";
+import { installAutoBackup } from "./js/auto-backup.js";
 
 const views = {
   year: renderYear,
@@ -92,6 +93,7 @@ onChange(updateFloatingBadge);
   try {
     await initDB();
     installGoogleSyncListeners();
+    installAutoBackup();
     await navigate("day");
     trySyncOnOpen().catch(error => console.info("Sincronización al abrir pendiente:", error?.message || error));
     if ("serviceWorker" in navigator) {
