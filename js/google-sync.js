@@ -226,6 +226,12 @@ async function syncCalendar(localTasks) {
       try { await deleteTask(local.id); } finally { applyingRemote = false; }
       continue;
     }
+    if (remote.eventType === "birthday") {
+      // Los cumpleaños son eventos especiales de Google: quitarlos de la agenda local
+      // sin intentar borrarlos ni modificarlos en el calendario original.
+      await deleteTaskLocalOnly(local.id);
+      continue;
+    }
     const localChanged = timestamp(local.updatedAt) > timestamp(local.gcalSyncedAt);
     const remoteChanged = timestamp(remote.updated) > timestamp(local.gcalUpdated);
     if (localChanged && local.gcalSyncedAt) {
@@ -237,7 +243,7 @@ async function syncCalendar(localTasks) {
         title: mapped.title, notes: mapped.notes, date: mapped.date,
         time: mapped.time || "", endTime: mapped.endTime || "",
         allDay: mapped.allDay, type: mapped.type,
-        gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso()
+        gcalEventType: remote.eventType || "default", gcalEventType: remote.eventType || "default", gcalEventType: remote.eventType || "default", gcalUpdated: remote.updated || null, gcalSyncedAt: nowIso()
       });
     }
   }
