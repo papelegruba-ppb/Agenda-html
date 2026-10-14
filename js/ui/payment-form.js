@@ -14,7 +14,9 @@ export async function openPaymentForm(payment, onSaved) {
     note: payment?.note || ""
   };
 
-  const billableCats = CATEGORIES.filter(c => c.billable);\n  const isClientExtra = defaults.categoryId === "extra-client";\n  const clientTasks = isClientExtra ? (await getAllTasks()).filter(t => t.type === "extra-client" && t.isChecklist !== true) : [];
+  const billableCats = CATEGORIES.filter(c => c.billable);
+  const isClientExtra = defaults.categoryId === "extra-client";
+  const clientTasks = isClientExtra ? (await getAllTasks()).filter(t => t.type === "extra-client" && t.isChecklist !== true) : [];
 
   const body = `
     <form class="payment-form" autocomplete="off">
@@ -67,7 +69,8 @@ export async function openPaymentForm(payment, onSaved) {
           amount: Number(fd.get("amount")) || 0,
           categoryId: fd.get("categoryId"),
           method: fd.get("method"),
-          note: (fd.get("note") || "").toString(),\n          ...(isClientExtra ? { taskId: (fd.get("taskId") || "").toString() || null } : {})
+          note: (fd.get("note") || "").toString(),
+          ...(isClientExtra ? { taskId: (fd.get("taskId") || "").toString() || null } : {})
         };
         if (isEdit) {
           await updatePayment(payment.id, data);
@@ -82,4 +85,5 @@ export async function openPaymentForm(payment, onSaved) {
   });
 }
 
-function escapeAttr(s) { return String(s || "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }\nfunction escapeHtml(s) { return String(s || "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+function escapeAttr(s) { return String(s || "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+function escapeHtml(s) { return String(s || "").replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
