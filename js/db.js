@@ -505,16 +505,18 @@ export async function restoreTrashItem(trashId) {
     const trash = t.objectStore("trash");
     const req = trash.get(trashId);
     let restored = false;
+    let restoredRecord = null;
     req.onsuccess = () => {
       const entry = req.result;
       if (!entry || Date.parse(entry.expiresAt || "") <= Date.now()) { if (entry) trash.delete(trashId); return; }
       if (!["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes"].includes(entry.collection)) return;
       t.objectStore(entry.collection).put(entry.record);
+      restoredRecord = entry.collection === "tasks" ? entry.record : null;
       trash.delete(trashId);
       restored = true;
     };
     req.onerror = () => reject(req.error);
-    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "restore" } })); } catch (_) {} resolve(restored); };
+    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "restore" } })); if (restoredRecord) window.dispatchEvent(new CustomEvent("papelegruba:task-change", { detail: { action: "upsert", task: restoredRecord } })); } catch (_) {} resolve(restored); };
     t.onerror = () => reject(t.error);
   });
 }
