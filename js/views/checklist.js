@@ -6,7 +6,7 @@ import { butterflySvg } from "../ui/butterfly.js";
 
 export async function renderChecklist(root) {
   const all = await getAllTasks();
-  const items = all.filter(t => t.isChecklist === true || (!t.date && t.type !== "medical" && !t.gcalEventId));
+  const items = all.filter(t => !t.calendarOnly && (t.isChecklist === true || (!t.date && t.type !== "medical" && !t.gcalEventId)));
   const pending = items.filter(t => !t.done);
   const done = items.filter(t => t.done);
 
