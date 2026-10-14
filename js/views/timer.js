@@ -44,9 +44,14 @@ export async function renderTimer(root) {
             <div class="hours-card-sub ${totals.balance >= 0 ? "hours-positive" : "hours-negative"}">${totals.balance >= 0 ? "+" : "−"}${(Math.abs(totals.balance) / totals.rate).toFixed(1)} h ${totals.balance >= 0 ? "a tu favor" : "que debes trabajar"}</div>
           </div>
           <div class="hours-card">
-            <div class="hours-card-label">Cobros registrados</div>
-            <div class="hours-card-value">${totals.paidAmount.toFixed(2)} €</div>
-            <div class="hours-card-sub">Este mes: ${totals.monthPaid.toFixed(2)} €</div>
+            <div class="hours-card-label">Pendiente de cobro</div>
+            <div class="hours-card-value hours-positive">${totals.pendingAmount.toFixed(2)} €</div>
+            <div class="hours-card-sub hours-positive">${totals.pendingHours.toFixed(1)} h a tu favor</div>
+          </div>
+          <div class="hours-card">
+            <div class="hours-card-label">Cobrado por adelantado</div>
+            <div class="hours-card-value ${totals.advanceAmount > 0 ? "hours-negative" : ""}">${totals.advanceAmount.toFixed(2)} €</div>
+            <div class="hours-card-sub ${totals.advanceAmount > 0 ? "hours-negative" : ""}">${totals.advanceHours.toFixed(1)} h que debes trabajar</div>
           </div>` : `
           <div class="hours-card"><div class="hours-card-label">Este mes</div><div class="hours-card-value">${totals.monthHours.toFixed(1)} h</div></div>
           <div class="hours-card"><div class="hours-card-label">Este año</div><div class="hours-card-value">${totals.yearHours.toFixed(1)} h</div></div>`}
@@ -130,23 +135,47 @@ function computeTotals(sessions, payments, categoryId) {
       if (d.getMonth() === month) monthHours += h;
     }
   }
-  const paidAmount = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+  const paidAmount = payments.reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0);
   const monthPaid = payments.filter(p => {
     const d = p.date ? new Date(p.date + "T00:00:00") : null;
     return d && !Number.isNaN(d.getTime()) && d.getFullYear() === year && d.getMonth() === month;
-  }).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+  }).reduce((sum, p) => sum + Math.max(0, Number(p.amount || 0)), 0);
 
   let balance = categoryId === "work-sye" ? cachedOpeningBalance : 0;
+  let advanceAmount = 0;
   let rate = DEFAULT_RATE;
+
+  // Los movimientos de sesión son lo trabajado y facturable. Un ajuste personal
+  // compensa dinero que la empresa te debe, pero nunca es un cobro en efectivo.
   for (const s of sessions) {
-    if (s.billable || s.adjustment) {
+    if (s.adjustment) {
+      balance -= getSessionAmount(s);
+    } else if (s.billable) {
       const amount = getSessionAmount(s);
-      balance += s.adjustment ? -amount : (s.billable ? amount : 0);
+      balance += amount;
       if (categoryId !== "work-sye" && Number(s.rate) > 0) rate = Number(s.rate);
     }
   }
-  balance -= paidAmount;
-  return { balance: roundMoney(balance), rate, paidAmount: roundMoney(paidAmount), monthPaid: roundMoney(monthPaid), monthHours, yearHours };
+
+  // Los cobros primero liquidan deuda de la empresa; solo el excedente es anticipo.
+  // Así, un cobro nunca aparece simultáneamente como saldo pendiente y anticipo.
+  const pendingAmount = Math.max(0, roundMoney(balance - paidAmount));
+  advanceAmount = Math.max(0, roundMoney(paidAmount - balance));
+  const netBalance = roundMoney(balance - paidAmount);
+
+  return {
+    balance: netBalance,
+    pendingAmount,
+    pendingHours: pendingAmount / rate,
+    advanceAmount,
+    advanceHours: advanceAmount / rate,
+    rate,
+    paidAmount: roundMoney(paidAmount),
+    monthPaid: roundMoney(monthPaid),
+    monthHours,
+    yearHours
+  };
 }
 
 function getSessionAmount(s) {
