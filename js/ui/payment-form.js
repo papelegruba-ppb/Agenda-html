@@ -2,7 +2,7 @@ import { openModal } from "./modal.js";
 import { addPayment, updatePayment, deletePayment, getAllTasks } from "../db.js";
 import { CATEGORIES } from "../categories.js";
 
-export function openPaymentForm(payment, onSaved) {
+export async function openPaymentForm(payment, onSaved) {
   const isEdit = !!(payment && payment.id);
   const now = new Date();
 
@@ -34,6 +34,10 @@ export function openPaymentForm(payment, onSaved) {
           `).join("")}
         </select>
       </label>
+
+      ${isClientExtra ? `<label>Trámite asociado
+        <select name="taskId"><option value="">Sin vincular (podrás editarlo después)</option>${clientTasks.map(t => `<option value="${escapeAttr(t.id)}" ${t.id === payment?.taskId ? "selected" : ""}>${escapeHtml(t.title)} · ${Number(t.tramiteAmount ?? t.amount ?? 0).toFixed(2)} €</option>`).join("")}</select>
+      </label>` : ""}
 
       <label>Método
         <select name="method">
