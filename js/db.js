@@ -415,7 +415,7 @@ export async function convertTaskToHabit(taskId) {
 /* Importación de respaldo por combinación, conservando IDs y enlaces. No borra datos existentes. */
 export async function mergeBackupData(data) {
   const db = await initDB();
-  const storeNames = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes"];
+  const storeNames = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes", "trash"];
   const payload = {
     tasks: Array.isArray(data.tasks) ? data.tasks : [],
     habits: Array.isArray(data.habits) ? data.habits : [],
@@ -425,7 +425,8 @@ export async function mergeBackupData(data) {
     payments: Array.isArray(data.payments) ? data.payments : [],
     settings: Array.isArray(data.settings) ? data.settings : [],
     healthEpisodes: Array.isArray(data.healthEpisodes) ? data.healthEpisodes : [],
-    medicationIntakes: Array.isArray(data.medicationIntakes) ? data.medicationIntakes : []
+    medicationIntakes: Array.isArray(data.medicationIntakes) ? data.medicationIntakes : [],
+    trash: Array.isArray(data.trash) ? data.trash : []
   };
   return new Promise((resolve, reject) => {
     const t = db.transaction(storeNames, "readwrite");
