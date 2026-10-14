@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import "fake-indexeddb/auto";
 import {
-  initDB, getAllTasks, getAllHabits, getAllHealthEpisodes, getAllMedicationIntakes,
+  initDB, getAllTasks, getAllHabits, getAllHealthEpisodes, getAllMedicationIntakes, getTrash, restoreTrashItem,
   addHealthEpisode, addMedicationIntake, updateHealthEpisode, updateMedicationIntake,
   deleteHealthEpisode, deleteMedicationIntake, convertTaskToHabit, mergeBackupData,
   getAllProjects, getAllNotes, getAllSessions, getAllPayments, getAllSettings
@@ -41,7 +41,7 @@ function openLegacyDatabase() {
   });
 }
 
-test("migra v2 a v3 sin borrar datos y permite CRUD, conversión idempotente y backup completo", async () => {
+test("migra v2 a v4 sin borrar datos y permite CRUD, conversión idempotente y backup completo", async () => {
   await new Promise((resolve, reject) => {
     const request = indexedDB.deleteDatabase("papelegruba");
     request.onsuccess = resolve;
@@ -51,7 +51,8 @@ test("migra v2 a v3 sin borrar datos y permite CRUD, conversión idempotente y b
   await openLegacyDatabase();
 
   const db = await initDB();
-  assert.equal(db.version, 3);
+  assert.equal(db.version, 4);
+  assert.ok(db.objectStoreNames.contains("trash"));
   assert.ok(db.objectStoreNames.contains("healthEpisodes"));
   assert.ok(db.objectStoreNames.contains("medicationIntakes"));
   assert.equal((await getAllTasks()).length, 1);
@@ -98,6 +99,7 @@ test("migra v2 a v3 sin borrar datos y permite CRUD, conversión idempotente y b
   assert.ok((await getAllMedicationIntakes()).some(item => item.id === "backup-intake"));
 
   await deleteMedicationIntake(intake.id);
+  assert.ok((await getTrash()).some(item => item.collection === "medicationIntakes" && item.recordId === intake.id));
   await deleteHealthEpisode(episode.id);
   assert.ok(!(await getAllMedicationIntakes()).some(item => item.id === intake.id));
   assert.ok(!(await getAllHealthEpisodes()).some(item => item.id === episode.id));
