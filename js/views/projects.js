@@ -10,12 +10,13 @@ export async function renderProjects(root) {
     const [allProjects, loadedTasks] = await Promise.all([getAllProjects(), getAllTasks()]);
     // Las tareas asignadas a Proyectos son tareas de Checklist, no eventos nuevos.
     // Se convierten localmente una sola vez; los eventos remotos existentes no se borran.
-    for (const task of loadedTasks) {
+    const nonBirthdayTasks = loadedTasks.filter(task => !task.calendarOnly);
+    for (const task of nonBirthdayTasks) {
       if (task.projectId && task.type !== "medical" && task.isChecklist !== true) {
         await updateTask(task.id, { isChecklist: true });
       }
     }
-    const tasks = loadedTasks.map(task =>
+    const tasks = nonBirthdayTasks.map(task =>
       task.projectId && task.type !== "medical" ? { ...task, isChecklist: true } : task
     );
     const projects = allProjects.filter(p => showArchived ? p.archived : !p.archived);
