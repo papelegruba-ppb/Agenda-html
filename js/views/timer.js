@@ -39,9 +39,14 @@ export async function renderTimer(root) {
       <div class="hours-summary">
         ${cat.billable ? `
           <div class="hours-card">
-            <div class="hours-card-label">Saldo actual</div>
-            <div class="hours-card-value ${totals.balance >= 0 ? "hours-positive" : "hours-negative"}">${totals.balance >= 0 ? "+" : "−"}${Math.abs(totals.balance).toFixed(2)} €</div>
-            <div class="hours-card-sub ${totals.balance >= 0 ? "hours-positive" : "hours-negative"}">${totals.balance >= 0 ? "+" : "−"}${(Math.abs(totals.balance) / totals.rate).toFixed(1)} h ${totals.balance >= 0 ? "a tu favor" : "que debes trabajar"}</div>
+            <div class="hours-card-label">Pendiente de cobro</div>
+            <div class="hours-card-value hours-positive">${totals.pendingAmount >= 0 ? "+" : "−"}${Math.abs(totals.pendingAmount).toFixed(2)} €</div>
+            <div class="hours-card-sub hours-neutral">${totals.pendingHours.toFixed(1)} h a tu favor</div>
+          </div>
+          <div class="hours-card">
+            <div class="hours-card-label">Cobrado por adelantado</div>
+            <div class="hours-card-value ${totals.advanceHours > 0 ? "hours-negative" : ""}">${totals.advanceHours > 0 ? "−" : ""}${totals.advanceHours.toFixed(1)} h</div>
+            <div class="hours-card-sub hours-neutral">${totals.advanceAmount.toFixed(2)} € que debes trabajar</div>
           </div>` : `
           <div class="hours-card"><div class="hours-card-label">Este mes</div><div class="hours-card-value">${totals.monthHours.toFixed(1)} h</div></div>
           <div class="hours-card"><div class="hours-card-label">Este año</div><div class="hours-card-value">${totals.yearHours.toFixed(1)} h</div></div>`}
