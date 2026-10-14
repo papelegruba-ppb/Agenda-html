@@ -51,3 +51,9 @@ function notify() {
 }
 
 setInterval(notify, 1000);
+
+// Refrescar la interfaz cuando Drive restaura el cronómetro o cuando cambia en otra pestaña.
+window.addEventListener("papelegruba:timer-sync", notify);
+window.addEventListener("storage", event => {
+  if (event.key === STORAGE_KEY) notify();
+});
