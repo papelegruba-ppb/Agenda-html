@@ -148,7 +148,7 @@ export async function importAllEvents({ from = "2025-01-01T00:00:00Z", to = null
     if (pageToken) params.set("pageToken", pageToken);
 
     const data = await api(`/calendars/${encodeURIComponent(calendarId)}/events?${params}`);
-    const items = (data.items || []).filter(e => e.status !== "cancelled" && e.eventType !== "birthday");
+    const items = (data.items || []).filter(e => e.status !== "cancelled");
     allEvents.push(...items);
     pageToken = data.nextPageToken || null;
     page++;
@@ -197,6 +197,7 @@ export function gcalEventToTask(event) {
     done: false,
     gcalEventId: event.id,
     gcalEventType: event.eventType || "default",
+    calendarOnly: event.eventType === "birthday",
     gcalUpdated: event.updated,
     allDay: isAllDay
   };
