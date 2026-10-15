@@ -58,9 +58,8 @@ export function installDriveSyncListeners() {
   if (autoSyncInstalled) return;
   autoSyncInstalled = true;
   const changed = event => {
-    // Los eventos que genera la propia aplicación de un plan no deben iniciar
-    // una segunda sincronización concurrente.
-    if (event?.detail?.source === "drive-sync") return;
+    // La aplicación del propio plan genera este evento; no debe reactivar el ciclo.
+    if (event?.detail?.source === "drive-sync" || event?.detail?.collection === "drive-sync") return;
     scheduleAutoDriveSync();
   };
   window.addEventListener("papelegruba:data-change", changed);
