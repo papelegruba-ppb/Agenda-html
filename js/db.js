@@ -207,12 +207,15 @@ export async function setSetting(key, value) {
 }
 
 /* ============ PROYECTOS ============ */
-export async function addProject(partial) {
+export async function addProject(partial = {}) {
   const now = new Date().toISOString();
   const project = {
-    id: uid(), name: "", color: "#C9A7E8", archived: false,
-    createdAt: now, ...partial
+    name: "", color: "#C9A7E8", archived: false,
+    createdAt: now, ...(partial && typeof partial === "object" ? partial : {})
   };
+  // La clave se genera después de extender los datos recibidos para impedir
+  // que un id ausente/undefined enviado por un formulario anule la clave.
+  project.id = uid();
   await tx("projects", "readwrite", s => s.put(project));
   return project;
 }
@@ -246,8 +249,9 @@ export async function addSession(partial) {
     billedAt: null,
     adjustment: false,
     createdAt: now,
-    ...partial
+    ...(partial && typeof partial === "object" ? partial : {})
   };
+  session.id = uid();
   await tx("sessions", "readwrite", s => s.put(session));
   return session;
 }
@@ -299,8 +303,9 @@ export async function addPayment(partial) {
     note: "",
     appliedToSessions: [],
     createdAt: now,
-    ...partial
+    ...(partial && typeof partial === "object" ? partial : {})
   };
+  payment.id = uid();
   await tx("payments", "readwrite", s => s.put(payment));
   return payment;
 }
@@ -603,7 +608,8 @@ export async function getAllHealthEpisodes() {
 }
 export async function addHealthEpisode(partial = {}) {
   const now = new Date().toISOString();
-  const episode = { id: uid(), type: "Otros", title: "", startAt: now.slice(0,16), endAt: "", intensity: null, symptoms: "", triggers: "", notes: "", createdAt: now, updatedAt: now, ...partial };
+  const episode = { type: "Otros", title: "", startAt: now.slice(0,16), endAt: "", intensity: null, symptoms: "", triggers: "", notes: "", createdAt: now, updatedAt: now, ...(partial && typeof partial === "object" ? partial : {}) };
+  episode.id = uid();
   await tx("healthEpisodes", "readwrite", s => s.add(episode));
   return episode;
 }
@@ -653,7 +659,8 @@ export async function getAllMedicationIntakes() {
 }
 export async function addMedicationIntake(partial = {}) {
   const now = new Date().toISOString();
-  const intake = { id: uid(), medication: "", dose: "", takenAt: now.slice(0,16), episodeId: null, effect: "", notes: "", createdAt: now, updatedAt: now, ...partial };
+  const intake = { medication: "", dose: "", takenAt: now.slice(0,16), episodeId: null, effect: "", notes: "", createdAt: now, updatedAt: now, ...(partial && typeof partial === "object" ? partial : {}) };
+  intake.id = uid();
   await tx("medicationIntakes", "readwrite", s => s.add(intake));
   return intake;
 }
