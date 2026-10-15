@@ -15,6 +15,67 @@ let tokenClient = null;
 let accessToken = null;
 let expiresAt = 0;
 let accountEmail = null;
+let autoSyncInstalled = false;
+let autoSyncTimer = null;
+let autoSyncRunning = false;
+let autoSyncAgain = false;
+let lastAutoSyncSignature = "";
+
+function scheduleAutoDriveSync(delay = 900) {
+  if (autoSyncTimer) clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(() => {
+    autoSyncTimer = null;
+    runAutoDriveSync();
+  }, delay);
+}
+
+async function runAutoDriveSync() {
+  if (autoSyncRunning) { autoSyncAgain = true; return; }
+  if (!accessToken || Date.now() >= expiresAt - 30000 || document.visibilityState !== "visible") return;
+  autoSyncRunning = true;
+  try {
+    const plan = await previewDriveSync();
+    // Evita reescrituras en bucle cuando solo cambia la marca de sincronización.
+    const signature = stable(plan.merged);
+    if (signature !== lastAutoSyncSignature || plan.conflicts.length || !plan.remoteExists) {
+      await applyDriveSync(plan);
+      lastAutoSyncSignature = stable(plan.merged);
+      window.dispatchEvent(new CustomEvent("papelegruba:drive-sync-status", {
+        detail: { ok: true, at: new Date().toISOString(), conflicts: plan.conflicts.length }
+      }));
+    }
+  } catch (error) {
+    window.dispatchEvent(new CustomEvent("papelegruba:drive-sync-status", {
+      detail: { ok: false, message: error?.message || String(error) }
+    }));
+  } finally {
+    autoSyncRunning = false;
+    if (autoSyncAgain) { autoSyncAgain = false; scheduleAutoDriveSync(400); }
+  }
+}
+
+export function installDriveSyncListeners() {
+  if (autoSyncInstalled) return;
+  autoSyncInstalled = true;
+  const changed = event => {
+    // Los eventos que genera la propia aplicación de un plan no deben iniciar
+    // una segunda sincronización concurrente.
+    if (event?.detail?.source === "drive-sync") return;
+    scheduleAutoDriveSync();
+  };
+  window.addEventListener("papelegruba:data-change", changed);
+  window.addEventListener("papelegruba:task-change", changed);
+  window.addEventListener("papelegruba:drive-sync-connected", () => scheduleAutoDriveSync(250));
+  window.addEventListener("online", () => scheduleAutoDriveSync(250));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") scheduleAutoDriveSync(250);
+  });
+  // Una PWA estática no recibe notificaciones push de Drive; consulta mientras
+  // permanece abierta para recoger cambios realizados desde otros dispositivos.
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") scheduleAutoDriveSync(100);
+  }, 30000);
+}
 
 function loadGis() {
   if (window.google?.accounts?.oauth2) return Promise.resolve();
@@ -58,6 +119,7 @@ export async function connectDriveSync({ chooseAccount = true } = {}) {
         accountEmail = user.email || null;
         await setSetting("driveSyncAccountEmail", accountEmail);
         await setSetting("driveSyncConnected", true);
+        window.dispatchEvent(new CustomEvent("papelegruba:drive-sync-connected"));
         resolve({ email: accountEmail });
       } catch (error) {
         accessToken = null;
