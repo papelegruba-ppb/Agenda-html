@@ -3,7 +3,7 @@ import { getActiveTimer } from "./hours.js";
 import {
   getAllTasks, getAllHabits, getAllProjects, getAllNotes, getAllSessions,
   getAllPayments, getAllHealthEpisodes, getAllMedicationIntakes, getAllSettings, getTrash,
-  getSetting, setSetting, mergeBackupData
+  getSetting, setSetting, replaceSyncedCollections
 } from "./db.js";
 
 const SCOPE = "https://www.googleapis.com/auth/drive.appdata openid email profile";
@@ -363,12 +363,7 @@ export async function applyDriveSync(plan) {
   // Write cloud first. If the local write fails, the next preview can recover the remote changes.
   await uploadEnvelope(latest.file, plan.merged);
   const settings = await getAllSettings();
-  await mergeBackupData({
-    format: "papelegruba-backup",
-    version: 3,
-    ...plan.merged,
-    settings
-  });
+  await replaceSyncedCollections(plan.merged);
   // Restaurar el cronómetro activo y el saldo inicial desde el estado sincronizado.
   const appState = new Map((plan.merged.appState || []).map(item => [item.id, item.value]));
   if (appState.has("activeTimer")) {
