@@ -196,7 +196,9 @@ function planMerge(local, remote, base) {
           out.set(id, l);
         }
       } else {
-        // On the first sync, matching IDs with different content are ambiguous.
+        // Sin una base previa, Agenda HTML también prevalece para IDs coincidentes.
+        out.set(id, l);
+        counts.localToCloud++;
         conflicts.push({ collection: name, id, base: null, local: l, drive: r });
       }
     }
