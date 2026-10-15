@@ -429,13 +429,25 @@ function backupRecordName(collection, item) {
   if (collection === "medicationIntakes") return normalizeDuplicateText(item.medication || item.name || item.title);
   return "";
 }
+function backupRecordName(collection, item) {
+  if (!item || typeof item !== "object") return "";
+  if (collection === "tasks") return normalizeDuplicateText(item.title || item.name);
+  if (collection === "projects" || collection === "habits") return normalizeDuplicateText(item.name || item.title);
+  if (collection === "notes") return normalizeDuplicateText(item.title || item.name);
+  if (collection === "healthEpisodes") return normalizeDuplicateText(item.title || item.type);
+  if (collection === "medicationIntakes") return normalizeDuplicateText(item.medication || item.name || item.title);
+  return "";
+}
 function backupDuplicateKey(collection, item) {
   const name = backupRecordName(collection, item);
   if (!name) return "";
-  // Para tareas, el mismo título cuenta como la misma tarea aunque la copia
-  // tenga metadatos, IDs o fechas diferentes. Para las demás colecciones,
-  // combinar nombre con campos de contexto para no fusionar elementos distintos.
-  if (collection === "tasks") return name;
+  // Las tareas solo son duplicadas si coinciden título, fecha y notas.
+  // Un título compartido con distinta fecha o notas representa otro registro.
+  if (collection === "tasks") {
+    const date = normalizeDuplicateText(item.date || item.dueDate || item.startDate || item.startAt || "");
+    const notes = normalizeDuplicateText(item.notes || item.note || item.description || "");
+    return [name, date, notes].join("|");
+  }
   if (collection === "projects" || collection === "habits" || collection === "notes") return name;
   return name + "|" + String(item.date || item.startAt || item.createdAt || "");
 }
