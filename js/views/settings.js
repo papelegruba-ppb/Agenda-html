@@ -507,9 +507,9 @@ export async function renderSettings(root) {
       const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes", "trash"];
       const total = collections.reduce((sum, key) => sum + (Array.isArray(data[key]) ? data[key].length : 0), 0);
       if (!total) throw new Error("La copia no contiene datos reconocibles.");
-      const count = await mergeBackupData(data);
+      const result = await mergeBackupData(data);
       restoreTimerFromBackup(data);
-      localMsg.textContent = "Restauración completada: " + count + " registros procesados. No se han borrado datos.";
+      localMsg.textContent = "Restauración completada: " + result.imported + " registros nuevos añadidos; " + result.skippedExisting + " ya existentes o duplicados omitidos. No se han sobrescrito los registros locales existentes.";
     } catch (e) { localMsg.textContent = "Error restaurando desde Drive: " + (e.message || e); }
   };
   /* Importar JSON */
@@ -544,9 +544,9 @@ export async function renderSettings(root) {
         return;
       }
       try {
-        const count = await mergeBackupData(data);
+        const result = await mergeBackupData(data);
         restoreTimerFromBackup(data);
-        localMsg.textContent = `✅ Restauración completada: ${count} registros procesados. Los datos existentes no se han borrado.`;
+        localMsg.textContent = `✅ Restauración completada: ${result.imported} registros nuevos añadidos; ${result.skippedExisting} ya existentes o duplicados omitidos. Los registros locales existentes se han conservado.`;
       } catch (e) {
         localMsg.textContent = "❌ Error restaurando el respaldo: " + (e.message || e);
         return;
