@@ -415,33 +415,86 @@ export async function convertTaskToHabit(taskId) {
 }
 
 /* Importación de respaldo por combinación, conservando IDs y enlaces. No borra datos existentes. */
+/* Importación idempotente de respaldos: conserva los registros locales existentes,
+   evita IDs repetidos y evita importar otra tarea/evento con el mismo nombre y contexto. */
+function normalizeDuplicateText(value) {
+  return String(value || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("es").replace(/[^a-z0-9]+/g, " ").trim();
+}
+function backupRecordName(collection, item) {
+  if (!item || typeof item !== "object") return "";
+  if (collection === "tasks") return normalizeDuplicateText(item.title || item.name);
+  if (collection === "projects" || collection === "habits") return normalizeDuplicateText(item.name || item.title);
+  if (collection === "notes") return normalizeDuplicateText(item.title || item.name);
+  if (collection === "healthEpisodes") return normalizeDuplicateText(item.title || item.type);
+  if (collection === "medicationIntakes") return normalizeDuplicateText(item.medication || item.name || item.title);
+  return "";
+}
+function backupDuplicateKey(collection, item) {
+  const name = backupRecordName(collection, item);
+  if (!name) return "";
+  // Para tareas, el mismo título cuenta como la misma tarea aunque la copia
+  // tenga metadatos, IDs o fechas diferentes. Para las demás colecciones,
+  // combinar nombre con campos de contexto para no fusionar elementos distintos.
+  if (collection === "tasks") return name;
+  if (collection === "projects" || collection === "habits" || collection === "notes") return name;
+  return name + "|" + String(item.date || item.startAt || item.createdAt || "");
+}
 export async function mergeBackupData(data) {
   const db = await initDB();
   const storeNames = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes", "trash"];
-  const payload = {
-    tasks: Array.isArray(data.tasks) ? data.tasks : [],
-    habits: Array.isArray(data.habits) ? data.habits : [],
-    projects: Array.isArray(data.projects) ? data.projects : [],
-    notes: Array.isArray(data.notes) ? data.notes : [],
-    sessions: Array.isArray(data.sessions) ? data.sessions : [],
-    payments: Array.isArray(data.payments) ? data.payments : [],
-    settings: Array.isArray(data.settings) ? data.settings : [],
-    healthEpisodes: Array.isArray(data.healthEpisodes) ? data.healthEpisodes : [],
-    medicationIntakes: Array.isArray(data.medicationIntakes) ? data.medicationIntakes : [],
-    trash: Array.isArray(data.trash) ? data.trash : []
-  };
+  const payload = Object.fromEntries(storeNames.map(name => [name, Array.isArray(data?.[name]) ? data[name] : []]));
   return new Promise((resolve, reject) => {
     const t = db.transaction(storeNames, "readwrite");
-    let count = 0;
-    for (const name of storeNames) for (const item of payload[name]) {
-      if (!item || typeof item !== "object") continue;
-      if (name === "settings" ? typeof item.key !== "string" : (item.id == null || item.id === "")) continue;
-      t.objectStore(name).put(item); count++;
+    const existing = {};
+    let imported = 0, skippedExisting = 0, invalid = 0;
+    for (const name of storeNames) {
+      const store = t.objectStore(name);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        existing[name] = req.result || [];
+        const existingIds = new Set(existing[name].map(item => name === "settings" ? item.key : String(item.id)));
+        const existingNames = new Set(existing[name].map(item => backupDuplicateKey(name, item)).filter(Boolean));
+        const incomingIds = new Set();
+        for (const item of payload[name]) {
+          if (!item || typeof item !== "object" || (name === "settings" ? typeof item.key !== "string" : item.id == null || item.id === "")) {
+            invalid++;
+            continue;
+          }
+          const id = name === "settings" ? item.key : String(item.id);
+          const duplicateKey = backupDuplicateKey(name, item);
+          if (existingIds.has(id) || incomingIds.has(id) || (duplicateKey && (existingNames.has(duplicateKey) || incomingNamesHas(name, duplicateKey, payload[name], item)))) {
+            skippedExisting++;
+            continue;
+          }
+          store.put(item);
+          imported++;
+          existingIds.add(id);
+          incomingIds.add(id);
+          if (duplicateKey) existingNames.add(duplicateKey);
+        }
+      };
+      req.onerror = () => { try { t.abort(); } catch (_) {} };
     }
-    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "restore" } })); } catch (_) {} resolve(count); };
+    t.oncomplete = () => {
+      try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "restore" } })); } catch (_) {}
+      resolve({ imported, skippedExisting, invalid, total: imported + skippedExisting + invalid });
+    };
     t.onerror = () => reject(t.error);
     t.onabort = () => reject(t.error || new Error("No se pudo restaurar el respaldo"));
   });
+}
+function incomingNamesHas(collection, key, items, current) {
+  // La detección entre elementos del mismo archivo se realiza por nombre,
+  // incluso cuando el archivo contiene IDs distintos para el mismo registro.
+  let seenCurrent = false;
+  for (const item of items) {
+    if (item === current) return false;
+    if (backupDuplicateKey(collection, item) === key) {
+      if (seenCurrent) return true;
+      seenCurrent = true;
+    }
+  }
+  return false;
 }
 
 // Sustituye atómicamente las colecciones compartidas por el resultado ya conciliado
