@@ -444,6 +444,32 @@ export async function mergeBackupData(data) {
   });
 }
 
+// Sustituye atómicamente las colecciones compartidas por el resultado ya conciliado
+// de Drive. Se usa solo en sincronización entre dispositivos, no en restauraciones JSON.
+export async function replaceSyncedCollections(data) {
+  const db = await initDB();
+  const names = ["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes", "trash"];
+  return new Promise((resolve, reject) => {
+    const t = db.transaction(names, "readwrite");
+    let count = 0;
+    for (const name of names) {
+      const store = t.objectStore(name);
+      store.clear();
+      for (const item of Array.isArray(data[name]) ? data[name] : []) {
+        if (!item || typeof item !== "object" || item.id == null || item.id === "") continue;
+        store.put(item);
+        count++;
+      }
+    }
+    t.oncomplete = () => {
+      try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "drive-sync" } })); } catch (_) {}
+      resolve(count);
+    };
+    t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error("No se pudieron aplicar los datos sincronizados."));
+  });
+}
+
 export async function getAllSettings() {
   const db = await initDB();
   return new Promise((resolve, reject) => {
