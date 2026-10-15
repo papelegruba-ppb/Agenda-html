@@ -183,7 +183,11 @@ function planMerge(local, remote, base) {
         const localChanged = !same(l, b);
         const remoteChanged = !same(r, b);
         if (localChanged && remoteChanged) {
+          // Agenda HTML es la fuente de verdad: conservar todos los campos locales
+          // y registrar el conflicto solo para auditoría, sin bloquear la sincronización.
+          out.set(id, l);
           conflicts.push({ collection: name, id, base: b, local: l, drive: r });
+          counts.localToCloud++;
         } else if (localChanged) {
           out.set(id, l); counts.localToCloud++;
         } else if (remoteChanged) {
@@ -252,7 +256,8 @@ export async function applyDriveSync(plan) {
   requireToken();
   if (!plan || !plan.merged || !Array.isArray(plan.conflicts)) throw new Error("La vista previa ha caducado. Vuelve a sincronizar.");
   if (!accountEmail || accountEmail !== plan.accountEmail) throw new Error("La cuenta de Google ha cambiado desde la vista previa. Analiza los cambios de nuevo.");
-  if (plan.conflicts.length) throw new Error("Hay conflictos entre dispositivos. No se ha cambiado ningún dato; revisa y resuelve las diferencias antes de volver a sincronizar.");
+  // Los conflictos ya están resueltos en el plan a favor de Agenda HTML.
+  // Se conserva el informe para auditoría, pero no se bloquea la aplicación.
   const latest = await readRemote();
   if (latest.stamp !== plan.remoteStamp) {
     throw new Error("Drive ha cambiado desde la vista previa. No se ha aplicado nada; vuelve a pulsar «Analizar cambios».");
