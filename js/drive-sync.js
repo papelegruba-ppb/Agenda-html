@@ -159,6 +159,18 @@ function stable(value) {
   return JSON.stringify(value);
 }
 const same = (a, b) => stable(a) === stable(b);
+// Los relojes de sincronización no representan cambios de contenido y no deben
+// generar conflictos por sí solos.
+const SYNC_METADATA_FIELDS = new Set(["updatedAt", "gtaskUpdated", "gtaskSyncedAt", "gcalUpdated", "gcalSyncedAt"]);
+function sameRecord(a, b) {
+  if (!a || !b || typeof a !== "object" || typeof b !== "object" || Array.isArray(a) || Array.isArray(b)) {
+    return same(a, b);
+  }
+  const stripSyncMetadata = value => Object.fromEntries(
+    Object.entries(value).filter(([key]) => !SYNC_METADATA_FIELDS.has(key))
+  );
+  return same(stripSyncMetadata(a), stripSyncMetadata(b));
+}
 const recordMap = list => new Map(list.filter(item => item && item.id != null).map(item => [String(item.id), item]));
 
 function planMerge(local, remote, base) {
@@ -178,10 +190,10 @@ function planMerge(local, remote, base) {
       if (l === undefined && r === undefined) { if (b !== undefined) out.set(id, b); continue; }
       if (l === undefined) { if (r !== undefined) out.set(id, r); continue; }
       if (r === undefined) { out.set(id, l); continue; }
-      if (same(l, r)) { out.set(id, l); counts.unchanged++; continue; }
+      if (sameRecord(l, r)) { out.set(id, l); counts.unchanged++; continue; }
       if (b !== undefined) {
-        const localChanged = !same(l, b);
-        const remoteChanged = !same(r, b);
+        const localChanged = !sameRecord(l, b);
+        const remoteChanged = !sameRecord(r, b);
         if (localChanged && remoteChanged) {
           // Agenda HTML es la fuente de verdad: conservar todos los campos locales
           // y registrar el conflicto solo para auditoría, sin bloquear la sincronización.
