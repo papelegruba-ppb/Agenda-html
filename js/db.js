@@ -429,15 +429,6 @@ function backupRecordName(collection, item) {
   if (collection === "medicationIntakes") return normalizeDuplicateText(item.medication || item.name || item.title);
   return "";
 }
-function backupRecordName(collection, item) {
-  if (!item || typeof item !== "object") return "";
-  if (collection === "tasks") return normalizeDuplicateText(item.title || item.name);
-  if (collection === "projects" || collection === "habits") return normalizeDuplicateText(item.name || item.title);
-  if (collection === "notes") return normalizeDuplicateText(item.title || item.name);
-  if (collection === "healthEpisodes") return normalizeDuplicateText(item.title || item.type);
-  if (collection === "medicationIntakes") return normalizeDuplicateText(item.medication || item.name || item.title);
-  return "";
-}
 function backupDuplicateKey(collection, item) {
   const name = backupRecordName(collection, item);
   if (!name) return "";
