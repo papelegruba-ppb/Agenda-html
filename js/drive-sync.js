@@ -239,18 +239,40 @@ function planMerge(local, remote, base) {
   const merged = {};
   const conflicts = [];
   const counts = { localToCloud: 0, cloudToLocal: 0, unchanged: 0 };
+  const activeCollections = COLLECTIONS.filter(name => name !== "trash" && name !== "appState");
+  const activeKey = (collection, id) => `${collection}:${String(id)}`;
+  const localActiveKeys = new Set(activeCollections.flatMap(collection =>
+    (local[collection] || []).filter(Boolean).map(item => activeKey(collection, item.id))
+  ));
+  const localTrashKeys = new Set((local.trash || []).map(item => activeKey(item.collection, item.recordId)));
+  const remoteTrashKeys = new Set((remote.trash || []).map(item => activeKey(item.collection, item.recordId)));
   for (const name of COLLECTIONS) {
-    const lm = recordMap(local[name] || []);
-    const rm = recordMap(remote[name] || []);
+    const localList = name === "trash"
+      ? (local[name] || []).filter(item => !localActiveKeys.has(activeKey(item.collection, item.recordId)))
+      : (local[name] || []);
+    const remoteList = name === "trash"
+      ? (remote[name] || []).filter(item => !localActiveKeys.has(activeKey(item.collection, item.recordId)))
+      : (remote[name] || []);
+    const lm = recordMap(localList);
+    const rm = recordMap(remoteList);
     const bm = recordMap(base?.[name] || []);
     const ids = new Set([...lm.keys(), ...rm.keys(), ...bm.keys()]);
     const out = new Map();
     for (const id of ids) {
       const l = lm.get(id), r = rm.get(id), b = bm.get(id);
-      // Deletions are intentionally not propagated. If both copies are absent but the base had the record,
-      // restore the base version instead of treating absence as an instruction to delete it remotely.
-      if (l === undefined && r === undefined) { if (b !== undefined) out.set(id, b); continue; }
-      if (l === undefined) { if (r !== undefined) out.set(id, r); continue; }
+      // La papelera local es la instrucción de eliminación autoritativa.
+      // El registro se elimina de la colección activa en Drive, conservando la entrada
+      // de papelera durante su ventana de recuperación de 7 días.
+      const key = activeKey(name, id);
+      if (name !== "trash" && name !== "appState" && localTrashKeys.has(key) && l === undefined) continue;
+      // Si el dispositivo local tiene el registro activo, una papelera remota antigua
+      // no debe deshacer una restauración hecha en Agenda HTML.
+      if (l === undefined && r === undefined) { if (b !== undefined && !localTrashKeys.has(key)) out.set(id, b); continue; }
+      if (l === undefined) {
+        if (name !== "trash" && name !== "appState" && (localTrashKeys.has(key) || remoteTrashKeys.has(key))) continue;
+        if (r !== undefined) out.set(id, r);
+        continue;
+      }
       if (r === undefined) { out.set(id, l); continue; }
       if (sameRecord(l, r)) { out.set(id, l); counts.unchanged++; continue; }
       if (b !== undefined) {
