@@ -418,7 +418,7 @@ export async function convertTaskToHabit(taskId) {
 /* Importación idempotente de respaldos: conserva los registros locales existentes,
    evita IDs repetidos y evita importar otra tarea/evento con el mismo nombre y contexto. */
 function normalizeDuplicateText(value) {
-  return String(value || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("es").replace(/[^a-z0-9]+/g, " ").trim();
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").replace(/[^a-z0-9]+/g, " ").trim();
 }
 function backupRecordName(collection, item) {
   if (!item || typeof item !== "object") return "";
@@ -462,7 +462,7 @@ export async function mergeBackupData(data) {
           }
           const id = name === "settings" ? item.key : String(item.id);
           const duplicateKey = backupDuplicateKey(name, item);
-          if (existingIds.has(id) || incomingIds.has(id) || (duplicateKey && (existingNames.has(duplicateKey) || incomingNamesHas(name, duplicateKey, payload[name], item)))) {
+          if (existingIds.has(id) || incomingIds.has(id) || (duplicateKey && existingNames.has(duplicateKey))) {
             skippedExisting++;
             continue;
           }
@@ -483,20 +483,6 @@ export async function mergeBackupData(data) {
     t.onabort = () => reject(t.error || new Error("No se pudo restaurar el respaldo"));
   });
 }
-function incomingNamesHas(collection, key, items, current) {
-  // La detección entre elementos del mismo archivo se realiza por nombre,
-  // incluso cuando el archivo contiene IDs distintos para el mismo registro.
-  let seenCurrent = false;
-  for (const item of items) {
-    if (item === current) return false;
-    if (backupDuplicateKey(collection, item) === key) {
-      if (seenCurrent) return true;
-      seenCurrent = true;
-    }
-  }
-  return false;
-}
-
 // Sustituye atómicamente las colecciones compartidas por el resultado ya conciliado
 // de Drive. Se usa solo en sincronización entre dispositivos, no en restauraciones JSON.
 export async function replaceSyncedCollections(data) {
