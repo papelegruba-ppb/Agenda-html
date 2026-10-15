@@ -179,17 +179,17 @@ export async function renderSettings(root) {
           <p class="hint small">Local: ${localTotal} registros · Drive: ${remoteTotal} · Resultado previsto: ${mergedTotal}</p>
           <ul>${detail}</ul>
           ${plan.conflicts.length
-            ? `<p class="hint"><strong>Conflictos: ${plan.conflicts.length}.</strong> Hay registros con el mismo ID modificados de forma diferente. No se aplicará ningún cambio hasta resolverlos.</p><button type="button" class="btn-ghost" id="btnDriveSyncConflictReport">Descargar informe de conflictos</button>`
+            ? `<p class="hint"><strong>Conflictos detectados: ${plan.conflicts.length}.</strong> Al aplicar, prevalecerán los registros locales de Agenda HTML. Puedes guardar el informe para auditoría.</p><button type="button" class="btn-ghost" id="btnDriveSyncConflictReport">Descargar informe de conflictos</button>`
             : '<p class="hint">No se han detectado conflictos. Las eliminaciones no se propagan.</p>'}
           <p class="hint small">${plan.remoteExists ? "Archivo remoto encontrado." : "No existe aún un archivo remoto."} Se comprobará de nuevo antes de guardar.</p>
         </div>`;
       if (plan.conflicts.length) {
-        driveSyncMsg.textContent = "Sincronización bloqueada por conflictos. No se ha cambiado ningún dato.";
+        driveSyncMsg.textContent = "Se han detectado " + plan.conflicts.length + " conflictos. Al aplicar, Agenda HTML prevalecerá en esos registros.";
         driveSyncReview.querySelector("#btnDriveSyncConflictReport")?.addEventListener("click", () => downloadConflictReport(plan.conflicts));
       } else {
         driveSyncMsg.textContent = "Revisa el resumen y confirma para aplicar.";
-        driveSyncApplyButton.disabled = false;
       }
+      driveSyncApplyButton.disabled = false;
     } catch (error) {
       driveSyncMsg.textContent = "No se pudo analizar: " + (error.message || error);
     }
@@ -199,7 +199,10 @@ export async function renderSettings(root) {
     if (!driveSyncPlan || driveSyncPlan.conflicts.length) return;
     const localTotal = Object.values(driveSyncPlan.localCounts).reduce((a, b) => a + b, 0);
     const remoteTotal = Object.values(driveSyncPlan.remoteCounts).reduce((a, b) => a + b, 0);
-    if (!confirm(`Se sincronizarán los datos de Papelegruba. Local: ${localTotal}; Drive: ${remoteTotal}. No se propagarán eliminaciones. Si Drive ha cambiado desde la vista previa, se cancelará. ¿Continuar?`)) return;
+    const conflictNotice = driveSyncPlan.conflicts.length
+      ? `\n\nHay ${driveSyncPlan.conflicts.length} conflictos; en esos registros prevalecerá la versión local de Agenda HTML.`
+      : "";
+    if (!confirm(`Se sincronizarán los datos de Papelegruba. Local: ${localTotal}; Drive: ${remoteTotal}. No se propagarán eliminaciones. Si Drive ha cambiado desde la vista previa, se cancelará.${conflictNotice} ¿Continuar?`)) return;
     driveSyncApplyButton.disabled = true;
     driveSyncMsg.textContent = "Aplicando sincronización…";
     try {
