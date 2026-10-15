@@ -113,7 +113,12 @@ export async function updateTask(id, patch) {
     const s = t.objectStore("tasks");
     const req = s.get(id);
     req.onsuccess = () => {
-      const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
+      // No crear accidentalmente un registro nuevo sin clave si el ID no existe.
+      if (!req.result) {
+        reject(new Error(`No existe la tarea ${id}; no se ha guardado ningún cambio.`));
+        return;
+      }
+      const merged = { ...req.result, ...(patch && typeof patch === "object" ? patch : {}), id, updatedAt: new Date().toISOString() };
 
       // Sanear
       if (merged.date === null || merged.date === undefined) merged.date = "";
@@ -128,6 +133,7 @@ export async function updateTask(id, patch) {
       t.oncomplete = () => { emitTaskChange("upsert", merged); resolve(merged); };
     };
     req.onerror = () => reject(req.error);
+    t.onerror = () => reject(t.error);
   });
 }
 
