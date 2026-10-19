@@ -86,7 +86,7 @@ test("migra v2 a v4 sin borrar datos y permite CRUD, conversión idempotente y b
     healthEpisodes: [{ id: "backup-episode", type: "Otros", startAt: "2026-10-12T11:00" }],
     medicationIntakes: [{ id: "backup-intake", medication: "Medicamento respaldado", takenAt: "2026-10-12T11:10" }]
   });
-  assert.equal(imported, 9);
+  assert.equal(imported.imported, 9);
   assert.ok((await getAllTasks()).some(item => item.id === "check-1"));
   assert.ok((await getAllTasks()).some(item => item.id === "backup-task"));
   assert.ok((await getAllHabits()).some(item => item.id === "habit-existing"));
