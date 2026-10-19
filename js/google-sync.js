@@ -100,36 +100,36 @@ async function flushDeletionQueue() {
   await setSetting("googleSyncPendingDeletes", remaining);
 }
 
-async function syncChecklistTasks(localTasks, remoteTasks) {
-  const byRemoteId = new Map(remoteTasks.map(task => [task.id, task]));
-  // Solo sincronizamos tareas abiertas. Las completadas/cerradas en Google Tasks
-  // no se importan ni se vuelven a crear en la agenda.
-  const remoteLive = remoteTasks.filter(t => !t.deleted && t.status !== "completed");
+function checklistFingerprint(task) {
+  const title = String(task?.title || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("es").replace(/\s+/g, " ");
+  const dateValue = task?.due || task?.date || "";
+  const date = String(dateValue).slice(0, 10);
+  const notes = String(task?.notes || "").replace(/\r\n?/g, "\n").trim();
+  return JSON.stringify([title, date, notes]);
+}
 
-  // Si la base local contiene varias copias enlazadas al mismo ID remoto,
-  // conservamos una sola (la más recientemente actualizada) y eliminamos
-  // las copias locales sin emitir eventos que borren la tarea de Google.
+async function syncChecklistTasks(localTasks, remoteTasks) {
+  const remoteById = new Map(remoteTasks.map(task => [task.id, task]));
+  const remoteLive = remoteTasks.filter(task => !task.deleted && task.status !== "completed");
+  const liveRemoteIds = new Set(remoteLive.map(task => task.id));
+
+  // Un ID remoto solo puede estar enlazado a un registro local.
   const linkedGroups = new Map();
-  for (const item of localTasks.filter(t => t.gtaskId)) {
-    if (!linkedGroups.has(item.gtaskId)) linkedGroups.set(item.gtaskId, []);
-    linkedGroups.get(item.gtaskId).push(item);
+  for (const task of localTasks.filter(item => item.gtaskId)) {
+    if (!linkedGroups.has(task.gtaskId)) linkedGroups.set(task.gtaskId, []);
+    linkedGroups.get(task.gtaskId).push(task);
   }
   for (const copies of linkedGroups.values()) {
     if (copies.length < 2) continue;
     copies.sort((a, b) => timestamp(b.updatedAt) - timestamp(a.updatedAt));
-    for (const duplicate of copies.slice(1)) {
-      await deleteTaskLocalOnly(duplicate.id);
-    }
+    for (const duplicate of copies.slice(1)) await deleteTaskLocalOnly(duplicate.id);
   }
 
-  const dedupedLocalTasks = localTasks.filter(t => {
-    if (!t.gtaskId) return true;
-    const copies = linkedGroups.get(t.gtaskId) || [];
-    return !copies.length || copies[0].id === t.id;
-  });
-  const localByRemoteId = new Map(dedupedLocalTasks.filter(t => t.gtaskId).map(t => [t.gtaskId, t]));
-
-  // Aplicar cambios de Google Tasks. Las tareas completadas se retiran solo de la agenda.
+  // Aplicar cambios de tareas que ya están enlazadas.
+  let currentLocal = await getAllTasks();
+  const localByRemoteId = new Map(
+    currentLocal.filter(task => isChecklist(task) && task.gtaskId).map(task => [task.gtaskId, task])
+  );
   for (const remote of remoteTasks) {
     const local = localByRemoteId.get(remote.id);
     if (!local) continue;
@@ -139,19 +139,20 @@ async function syncChecklistTasks(localTasks, remoteTasks) {
         if (remote.deleted) await deleteTask(local.id);
         else await deleteTaskLocalOnly(local.id);
       } finally { applyingRemote = false; }
+      localByRemoteId.delete(remote.id);
       continue;
     }
+
     const localChanged = !!local.gtaskSyncedAt && timestamp(local.updatedAt) > timestamp(local.gtaskSyncedAt);
     const remoteChanged = timestamp(remote.updated) > timestamp(local.gtaskUpdated);
     if (remoteChanged && !localChanged) {
-      const completed = remote.status === "completed";
       await saveLocal(local, {
         title: remote.title || "(sin título)",
         notes: remote.notes || "",
         date: remote.due ? remote.due.slice(0, 10) : "",
         isChecklist: true,
-        done: completed,
-        doneAt: completed ? (remote.completed || nowIso()) : null,
+        done: false,
+        doneAt: null,
         gtaskId: remote.id,
         gtaskUpdated: remote.updated || null,
         gtaskSyncedAt: nowIso()
@@ -162,51 +163,121 @@ async function syncChecklistTasks(localTasks, remoteTasks) {
     }
   }
 
-  const localIds = new Set(dedupedLocalTasks.filter(t => t.gtaskId).map(t => t.gtaskId));
-  // Importar tareas nuevas de Google Tasks sin duplicar por título/notas.
-  for (const remote of remoteLive) {
-    if (localIds.has(remote.id)) continue;
-    const duplicate = localTasks.find(t => isChecklist(t) && !t.gtaskId &&
-      String(t.title || "").trim().toLocaleLowerCase() === String(remote.title || "").trim().toLocaleLowerCase() &&
-      String(t.notes || "") === String(remote.notes || ""));
-    const completed = remote.status === "completed";
-    if (duplicate) {
-      await saveLocal(duplicate, {
-        gtaskId: remote.id, gtaskUpdated: remote.updated || null,
-        gtaskSyncedAt: nowIso(), date: remote.due ? remote.due.slice(0, 10) : "", done: completed,
-        doneAt: completed ? (remote.completed || nowIso()) : null
-      });
-    } else {
+  // Usar datos actualizados tras la primera fase.
+  currentLocal = (await getAllTasks()).filter(isChecklist);
+
+  // Eliminar duplicados locales con mismo título+fecha+notas, aunque tengan IDs distintos.
+  // Se conserva el enlazado preferentemente y, después, el registro más reciente.
+  const localFingerprintGroups = new Map();
+  for (const task of currentLocal) {
+    const fingerprint = checklistFingerprint(task);
+    if (!localFingerprintGroups.has(fingerprint)) localFingerprintGroups.set(fingerprint, []);
+    localFingerprintGroups.get(fingerprint).push(task);
+  }
+  for (const copies of localFingerprintGroups.values()) {
+    if (copies.length < 2) continue;
+    copies.sort((a, b) => {
+      const linkedDiff = Number(!!b.gtaskId) - Number(!!a.gtaskId);
+      if (linkedDiff) return linkedDiff;
+      return timestamp(b.updatedAt) - timestamp(a.updatedAt);
+    });
+    const keeper = copies[0];
+    for (const duplicate of copies.slice(1)) {
+      if (duplicate.gtaskId && duplicate.gtaskId !== keeper.gtaskId && liveRemoteIds.has(duplicate.gtaskId)) {
+        try { await deleteGoogleTask(duplicate.gtaskId); }
+        catch (error) {
+          console.warn("No se pudo eliminar una tarea remota duplicada:", error?.message || error);
+          continue;
+        }
+      }
       applyingRemote = true;
-      try {
-        await addTask({
-          title: remote.title || "(sin título)", notes: remote.notes || "",
-          date: remote.due ? remote.due.slice(0, 10) : "",
-          type: "personal", isChecklist: true, done: completed,
-          doneAt: completed ? (remote.completed || nowIso()) : null,
-          gtaskId: remote.id, gtaskUpdated: remote.updated || null, gtaskSyncedAt: nowIso()
-        });
-      } finally { applyingRemote = false; }
+      try { await deleteTaskLocalOnly(duplicate.id); }
+      finally { applyingRemote = false; }
     }
   }
 
-  // Subir las tareas locales que todavía no tienen vínculo con Google Tasks.
-  const refreshed = await getAllTasks();
-  for (const local of refreshed.filter(t => isChecklist(t) && !t.gtaskId)) {
-    const match = remoteLive.find(remote =>
-      String(remote.title || "").trim().toLocaleLowerCase() === String(local.title || "").trim().toLocaleLowerCase() &&
-      String(remote.notes || "") === String(local.notes || ""));
-    const remote = match || await createGoogleTask(taskPayload(local));
-    await saveLocal(local, {
-      gtaskId: remote.id, gtaskUpdated: remote.updated || nowIso(), gtaskSyncedAt: nowIso()
-    });
+  currentLocal = (await getAllTasks()).filter(isChecklist);
+  const linkedRemoteIds = new Set(currentLocal.filter(task => task.gtaskId).map(task => task.gtaskId));
+
+  // Importar o enlazar tareas remotas abiertas usando una clave estricta:
+  // título, fecha y notas. El proceso es idempotente y enlaza cada ID una sola vez.
+  for (const remote of remoteLive) {
+    if (linkedRemoteIds.has(remote.id)) continue;
+    const fingerprint = checklistFingerprint(remote);
+    const duplicate = currentLocal.find(task => checklistFingerprint(task) === fingerprint);
+    if (duplicate) {
+      if (duplicate.gtaskId && duplicate.gtaskId !== remote.id) {
+        // Ya existe la misma tarea enlazada a otro ID remoto: no reimportarla.
+        try { await deleteGoogleTask(remote.id); }
+        catch (error) { console.warn("No se pudo eliminar una tarea de Google Tasks duplicada:", error?.message || error); }
+        continue;
+      }
+      await saveLocal(duplicate, {
+        gtaskId: remote.id,
+        gtaskUpdated: remote.updated || null,
+        gtaskSyncedAt: nowIso(),
+        isChecklist: true
+      });
+      duplicate.gtaskId = remote.id;
+      duplicate.gtaskUpdated = remote.updated || null;
+      duplicate.gtaskSyncedAt = nowIso();
+      linkedRemoteIds.add(remote.id);
+      continue;
+    }
+
+    applyingRemote = true;
+    let added;
+    try {
+      added = await addTask({
+        title: remote.title || "(sin título)",
+        notes: remote.notes || "",
+        date: remote.due ? remote.due.slice(0, 10) : "",
+        type: "personal",
+        isChecklist: true,
+        done: false,
+        doneAt: null,
+        gtaskId: remote.id,
+        gtaskUpdated: remote.updated || null,
+        gtaskSyncedAt: nowIso()
+      });
+    } finally { applyingRemote = false; }
+    currentLocal.push(added);
+    linkedRemoteIds.add(remote.id);
   }
 
-  // Los registros locales enlazados que ya no aparecen ni siquiera como borrados
-  // se dejan intactos: la API puede ocultar tareas antiguas o archivadas.
-  void byRemoteId;
-}
+  // Subir solo las tareas locales todavía sin enlace. Si ya existe una tarea remota
+  // idéntica, reutilizar su ID; nunca crear un segundo remoto para la misma clave.
+  currentLocal = (await getAllTasks()).filter(isChecklist);
+  const claimedRemoteIds = new Set(currentLocal.filter(task => task.gtaskId).map(task => task.gtaskId));
+  const remoteByFingerprint = new Map();
+  for (const remote of remoteLive) {
+    if (!remoteByFingerprint.has(checklistFingerprint(remote))) remoteByFingerprint.set(checklistFingerprint(remote), remote);
+  }
+  for (const local of currentLocal.filter(task => !task.gtaskId)) {
+    const candidate = remoteByFingerprint.get(checklistFingerprint(local));
+    if (candidate && !claimedRemoteIds.has(candidate.id)) {
+      await saveLocal(local, {
+        gtaskId: candidate.id,
+        gtaskUpdated: candidate.updated || null,
+        gtaskSyncedAt: nowIso(),
+        isChecklist: true
+      });
+      claimedRemoteIds.add(candidate.id);
+      continue;
+    }
+    const created = await createGoogleTask(taskPayload(local));
+    await saveLocal(local, {
+      gtaskId: created.id,
+      gtaskUpdated: created.updated || nowIso(),
+      gtaskSyncedAt: nowIso(),
+      isChecklist: true
+    });
+    claimedRemoteIds.add(created.id);
+  }
 
+  // La API puede ocultar tareas archivadas o antiguas; no borrar por ausencia.
+  void remoteById;
+}
 async function syncCalendar(localTasks) {
   const remoteEvents = await importAllEvents({
     from: "2020-01-01T00:00:00Z",
