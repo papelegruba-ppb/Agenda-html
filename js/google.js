@@ -309,7 +309,8 @@ export async function uploadBackupToDrive(payload) {
   const latestName = "papelegruba-backup-latest.json";
   const files = await listBackupsOnDrive();
   const latest = files.find(file => file.name === latestName);
-  const body = JSON.stringify({ ...payload, exportedAt: new Date().toISOString() }, null, 2);
+  const backupPayload = { ...payload, exportedAt: new Date().toISOString() };
+  const body = JSON.stringify(backupPayload, null, 2);
   let saved;
   if (latest) {
     const response = await driveFetch(`${DRIVE_UPLOAD_API}/files/${encodeURIComponent(latest.id)}?uploadType=media`, {
@@ -344,7 +345,26 @@ export async function uploadBackupToDrive(payload) {
     });
     saved = await response.json();
   }
-  // Limpiar las copias antiguas solo después de guardar correctamente la nueva copia.
+  // Verificar que Drive realmente contiene esta versión antes de informar éxito
+  // o enviar copias anteriores a la papelera.
+  const verifyResponse = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(saved.id)}?alt=media`);
+  let verifiedPayload;
+  try {
+    verifiedPayload = JSON.parse(await verifyResponse.text());
+  } catch (_) {
+    throw new Error("Drive respondió a la subida, pero no se pudo verificar el contenido de la copia.");
+  }
+  if (verifiedPayload?.format !== "papelegruba-backup" ||
+      verifiedPayload?.exportedAt !== backupPayload.exportedAt) {
+    throw new Error("Drive no confirma que la última versión de la copia se haya guardado. No se han eliminado copias anteriores.");
+  }
+  const metadataResponse = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(saved.id)}?fields=id,name,createdTime,modifiedTime,size,mimeType,webViewLink`);
+  saved = await metadataResponse.json();
+  if (!saved?.id || (latest && saved.id !== latest.id)) {
+    throw new Error("Drive no ha confirmado el archivo esperado. No se han eliminado copias anteriores.");
+  }
+
+  // Limpiar las copias antiguas solo después de verificar la copia actualizada.
   const oldFiles = files.filter(file => file.id !== saved.id);
   for (const old of oldFiles) {
     await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(old.id)}`, {
@@ -360,9 +380,9 @@ export async function listBackupsOnDrive() {
   const q = "name contains 'papelegruba-backup-' and trashed = false";
   const params = new URLSearchParams({
     q,
-    orderBy: "createdTime desc",
+    orderBy: "modifiedTime desc",
     pageSize: "100",
-    fields: "files(id,name,createdTime,size,mimeType,webViewLink)"
+    fields: "files(id,name,createdTime,modifiedTime,size,mimeType,webViewLink)"
   });
   const response = await driveFetch(`${DRIVE_API}/files?${params}`);
   const data = await response.json();
