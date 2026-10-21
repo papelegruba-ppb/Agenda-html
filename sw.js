@@ -1,11 +1,11 @@
-const CACHE = "papelegruba-v20";
+const CACHE = "papelegruba-v21";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js", "./manifest.json",
-  "./js/db.js", "./js/dates.js", "./js/categories.js", "./js/google-colors.js", "./js/google.js", "./js/google-sync.js", "./js/drive-sync.js",
+  "./config.js", "./js/db.js", "./js/hours.js", "./js/auto-backup.js", "./js/dates.js", "./js/categories.js", "./js/google-colors.js", "./js/google.js", "./js/google-sync.js", "./js/drive-sync.js",
   "./js/views/year.js", "./js/views/month.js", "./js/views/week.js", "./js/views/day.js",
   "./js/views/checklist.js", "./js/views/timer.js", "./js/views/projects.js",
   "./js/views/habits.js", "./js/views/medical.js", "./js/views/health.js", "./js/views/settings.js",
-  "./js/ui/modal.js", "./js/ui/category-picker.js", "./js/ui/task-form.js", "./js/ui/project-form.js",
+  "./js/ui/modal.js", "./js/ui/category-picker.js", "./js/ui/task-form.js", "./js/ui/project-form.js", "./js/ui/butterfly.js", "./js/ui/session-form.js", "./js/ui/payment-form.js",
 ];
 
 self.addEventListener("install", e => {
