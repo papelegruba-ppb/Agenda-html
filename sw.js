@@ -1,4 +1,4 @@
-const CACHE = "papelegruba-v21";
+const CACHE = "papelegruba-v22";
 const ASSETS = [
   "./", "./index.html", "./styles.css", "./app.js", "./manifest.json",
   "./config.js", "./js/db.js", "./js/hours.js", "./js/auto-backup.js", "./js/dates.js", "./js/categories.js", "./js/google-colors.js", "./js/google.js", "./js/google-sync.js", "./js/drive-sync.js",
