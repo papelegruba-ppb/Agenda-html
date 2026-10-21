@@ -165,7 +165,18 @@ export async function renderSettings(root) {
     driveSyncReview.innerHTML = "";
     driveSyncMsg.textContent = "Comparando datos locales y de Drive…";
     try {
-      let plan;\n      try {\n        plan = await previewDriveSync();\n      } catch (firstError) {\n        const message = firstError?.message || String(firstError);\n        if (!/autorización de Drive ha caducado|Elige primero una cuenta de Google/i.test(message)) throw firstError;\n        const account = await getDriveSyncAccount();\n        if (!account.email || !account.connected) throw firstError;\n        driveSyncMsg.textContent = "Renovando el acceso con la cuenta recordada…";\n        await connectDriveSync({ chooseAccount: false });\n        plan = await previewDriveSync();\n      }
+      let plan;
+      try {
+        plan = await previewDriveSync();
+      } catch (firstError) {
+        const message = firstError?.message || String(firstError);
+        if (!/autorización de Drive ha caducado|Elige primero una cuenta de Google/i.test(message)) throw firstError;
+        const account = await getDriveSyncAccount();
+        if (!account.email || !account.connected) throw firstError;
+        driveSyncMsg.textContent = "Renovando el acceso con la cuenta recordada…";
+        await connectDriveSync({ chooseAccount: false });
+        plan = await previewDriveSync();
+      }
       driveSyncPlan = plan;
       const localTotal = Object.values(plan.localCounts).reduce((a, b) => a + b, 0);
       const remoteTotal = Object.values(plan.remoteCounts).reduce((a, b) => a + b, 0);
