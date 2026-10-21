@@ -58,7 +58,7 @@ export async function renderSettings(root) {
 
       <section class="settings-block" id="driveSyncBlock">
         <h3>Sincronización entre dispositivos</h3>
-        <p class="hint">Sincroniza los datos de Papelegruba con el espacio privado appDataFolder de la cuenta de Google que elijas. Puede ser la misma de Calendar o una distinta; no accede a tus archivos normales de Drive.</p>
+        <p class="hint">Sincroniza los datos de Papelegruba con el espacio privado appDataFolder de tu cuenta de Google. La cuenta elegida se recuerda en este dispositivo; no accede a tus archivos normales de Drive.</p>
         <p class="hint" id="driveSyncAccountLabel">Consultando cuenta…</p>
         <div class="gcal-actions">
           <button class="btn-primary" id="btnDriveChooseAccount">Elegir cuenta de Google</button>
@@ -68,7 +68,7 @@ export async function renderSettings(root) {
           <button class="btn-primary" id="btnDriveSyncPreview">Analizar cambios</button>
           <button class="btn-ghost" id="btnDriveSyncApply" disabled>Aplicar sincronización</button>
         </div>
-        <p class="hint small" id="driveSyncMsg">Sincronización manual con vista previa. No se propagan eliminaciones y los cambios incompatibles bloquean la operación.</p>
+        <p class="hint small" id="driveSyncMsg">La agenda intenta sincronizar automáticamente mientras está abierta y autorizada. Si caduca el acceso, al analizar cambios intentará reconectar con la cuenta recordada. No se puede garantizar sincronización con el navegador cerrado.</p>
         <div id="driveSyncReview"></div>
       </section>
 
@@ -130,7 +130,7 @@ export async function renderSettings(root) {
     const account = await getDriveSyncAccount();
     const label = root.querySelector("#driveSyncAccountLabel");
     if (label) label.textContent = account.email
-      ? `Cuenta elegida: ${account.email}. Tras recargar la página tendrás que volver a autorizar el acceso.`
+      ? `Cuenta recordada: ${account.email}. Se intentará reutilizar esta cuenta y evitar pedir consentimiento de nuevo.`
       : "No hay una cuenta de sincronización elegida.";
   }
   await refreshDriveSyncAccountLabel();
@@ -165,7 +165,7 @@ export async function renderSettings(root) {
     driveSyncReview.innerHTML = "";
     driveSyncMsg.textContent = "Comparando datos locales y de Drive…";
     try {
-      const plan = await previewDriveSync();
+      let plan;\n      try {\n        plan = await previewDriveSync();\n      } catch (firstError) {\n        const message = firstError?.message || String(firstError);\n        if (!/autorización de Drive ha caducado|Elige primero una cuenta de Google/i.test(message)) throw firstError;\n        const account = await getDriveSyncAccount();\n        if (!account.email || !account.connected) throw firstError;\n        driveSyncMsg.textContent = "Renovando el acceso con la cuenta recordada…";\n        await connectDriveSync({ chooseAccount: false });\n        plan = await previewDriveSync();\n      }
       driveSyncPlan = plan;
       const localTotal = Object.values(plan.localCounts).reduce((a, b) => a + b, 0);
       const remoteTotal = Object.values(plan.remoteCounts).reduce((a, b) => a + b, 0);
