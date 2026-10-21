@@ -269,11 +269,17 @@ export async function updateSession(id, patch) {
     const s = t.objectStore("sessions");
     const req = s.get(id);
     req.onsuccess = () => {
-      const merged = { ...req.result, ...patch };
+      if (!req.result) {
+        try { t.abort(); } catch (_) {}
+        reject(new Error(`No existe la sesión ${id}; no se ha guardado ningún cambio.`));
+        return;
+      }
+      const merged = { ...req.result, ...(patch && typeof patch === "object" ? patch : {}), id };
       s.put(merged);
       t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "sessions" } })); } catch (_) {} resolve(merged); };
     };
     req.onerror = () => reject(req.error);
+    t.onerror = () => reject(t.error);
   });
 }
 
@@ -323,11 +329,17 @@ export async function updatePayment(id, patch) {
     const s = t.objectStore("payments");
     const req = s.get(id);
     req.onsuccess = () => {
-      const merged = { ...req.result, ...patch };
+      if (!req.result) {
+        try { t.abort(); } catch (_) {}
+        reject(new Error(`No existe el cobro ${id}; no se ha guardado ningún cambio.`));
+        return;
+      }
+      const merged = { ...req.result, ...(patch && typeof patch === "object" ? patch : {}), id };
       s.put(merged);
       t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "payments" } })); } catch (_) {} resolve(merged); };
     };
     req.onerror = () => reject(req.error);
+    t.onerror = () => reject(t.error);
   });
 }
 
