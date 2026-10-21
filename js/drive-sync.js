@@ -126,7 +126,9 @@ export async function connectDriveSync({ chooseAccount = true } = {}) {
         reject(error);
       }
     };
-    tokenClient.requestAccessToken({ prompt: chooseAccount ? "select_account consent" : "consent" });
+    // La cuenta ya está guardada en Agenda. Al reutilizarla no fuerces otra pantalla de consentimiento;
+    // Google solo la mostrará si la sesión o los permisos realmente lo requieren.
+    tokenClient.requestAccessToken({ prompt: chooseAccount ? "select_account consent" : "" });
   });
 }
 
