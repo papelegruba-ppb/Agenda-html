@@ -465,7 +465,7 @@ export async function renderSettings(root) {
       const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash()]);
       const payload = { format: "papelegruba-backup", version: 4, exportedAt: new Date().toISOString(), activeTimer: getActiveTimer(), tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash };
       const file = await uploadBackupToDrive(payload);
-      localMsg.textContent = "Copia guardada en Google Drive: " + (file.name || "Papelegruba");
+      localMsg.textContent = "Copia verificada en Google Drive: " + (file.name || "Papelegruba") + (file.modifiedTime ? " · actualizada " + new Date(file.modifiedTime).toLocaleString("es-ES") : "") + ". Se conserva una única copia actualizada.";
       await refreshDriveBackups();
     } catch (e) { localMsg.textContent = "Error guardando en Drive: " + (e.message || e); }
   };
@@ -486,7 +486,8 @@ export async function renderSettings(root) {
       files.forEach(file => {
         const option = document.createElement("option");
         option.value = file.id;
-        option.textContent = (file.name || "Backup") + (file.createdTime ? " · " + new Date(file.createdTime).toLocaleString("es-ES") : "");
+        const savedAt = file.modifiedTime || file.createdTime;
+        option.textContent = (file.name || "Backup") + (savedAt ? " · actualizada: " + new Date(savedAt).toLocaleString("es-ES") : "");
         select.appendChild(option);
       });
       localMsg.textContent = files.length ? "Encontradas " + files.length + " copias." : "No hay copias guardadas por Papelegruba en Drive.";
