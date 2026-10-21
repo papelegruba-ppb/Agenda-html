@@ -20,6 +20,28 @@ let autoSyncTimer = null;
 let autoSyncRunning = false;
 let autoSyncAgain = false;
 let lastAutoSyncSignature = "";
+let reconnectInFlight = null;
+let lastReconnectAttemptAt = 0;
+
+async function tryReconnectDriveSync() {
+  if (accessToken && Date.now() < expiresAt - 30000) return true;
+  if (reconnectInFlight) return reconnectInFlight;
+  // Evita bucles de ventanas OAuth si Google no permite la reconexión automática.
+  if (Date.now() - lastReconnectAttemptAt < 120000) return false;
+  const account = await getDriveSyncAccount();
+  if (!account.connected || !account.email) return false;
+  lastReconnectAttemptAt = Date.now();
+  reconnectInFlight = connectDriveSync({ chooseAccount: false })
+    .then(() => true)
+    .catch(error => {
+      window.dispatchEvent(new CustomEvent("papelegruba:drive-sync-status", {
+        detail: { ok: false, needsAuthorization: true, message: error?.message || String(error) }
+      }));
+      return false;
+    })
+    .finally(() => { reconnectInFlight = null; });
+  return reconnectInFlight;
+}
 
 function scheduleAutoDriveSync(delay = 900) {
   if (autoSyncTimer) clearTimeout(autoSyncTimer);
@@ -65,10 +87,22 @@ export function installDriveSyncListeners() {
   window.addEventListener("papelegruba:data-change", changed);
   window.addEventListener("papelegruba:task-change", changed);
   window.addEventListener("papelegruba:drive-sync-connected", () => scheduleAutoDriveSync(250));
-  window.addEventListener("online", () => scheduleAutoDriveSync(250));
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") scheduleAutoDriveSync(250);
+  window.addEventListener("online", async () => {
+    if (!accessToken || Date.now() >= expiresAt - 30000) await tryReconnectDriveSync();
+    scheduleAutoDriveSync(250);
   });
+  document.addEventListener("visibilitychange", async () => {
+    if (document.visibilityState === "visible") {
+      if (!accessToken || Date.now() >= expiresAt - 30000) await tryReconnectDriveSync();
+      scheduleAutoDriveSync(250);
+    }
+  });
+  // Al abrir o recargar la PWA, el token anterior ya no existe en memoria.
+  // Se intenta recuperar acceso con la cuenta recordada; si Google exige interacción,
+  // la sincronización queda pendiente sin arriesgar los datos locales.
+  if (document.visibilityState === "visible") {
+    tryReconnectDriveSync().then(ok => { if (ok) scheduleAutoDriveSync(250); });
+  }
   // Una PWA estática no recibe notificaciones push de Drive; consulta mientras
   // permanece abierta para recoger cambios realizados desde otros dispositivos.
   window.setInterval(() => {
