@@ -81,6 +81,22 @@ export async function addTask(partial) {
   // Ignoramos cualquier id que venga en el partial; siempre generamos uno nuevo
   const { id: _ignoredId, ...safePartial } = partial || {};
 
+  // --- COMPROBADOR DE DUPLICADOS ---
+  if (safePartial.title && safePartial.date) {
+    const tareasExistentes = await getTasksByDate(safePartial.date);
+    const tituloLimpio = safePartial.title.trim().toLowerCase();
+    
+    const esDuplicada = tareasExistentes.some(t => 
+      (t.title || "").trim().toLowerCase() === tituloLimpio
+    );
+
+    if (esDuplicada) {
+      console.log("Tarea duplicada detectada y bloqueada:", safePartial.title);
+      return null; // Abortamos la creación porque ya existe
+    }
+  }
+  // ---------------------------------
+
   const task = {
     id: uid(),
     type: "personal", title: "", notes: "",
