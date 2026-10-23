@@ -1,93 +1,30 @@
-import { getAllTasks, getAllProjects, getAllSessions, getAllPayments, getAllHabits, getAllNotes, getAllSettings, mergeBackupData, getSetting, setSetting, getAllHealthEpisodes, getAllMedicationIntakes, updateTask, deleteTask, deleteTaskLocalOnly, getTrash, restoreTrashItem, permanentlyDeleteTrashItem } from "../db.js";
-import { GOOGLE_CLIENT_ID } from "../../config.js";
-import { connectDriveSync, getDriveSyncAccount, disconnectDriveSync, previewDriveSync, applyDriveSync, downloadConflictReport } from "../drive-sync.js";
 import {
-  initGoogle,
-  requestToken,
-  isConnected,
-  disconnect,
-  getStoredEmail,
-  fetchUserEmail,
-  importAllEvents,
-  gcalEventToTask,
-  uploadBackupToDrive,
-  listBackupsOnDrive,
-  downloadBackupFromDrive
-} from "../google.js";
-import { syncGoogleData } from "../google-sync.js";
+  getAllTasks, getAllHabits, getAllProjects, getAllNotes, getAllSessions,
+  getAllPayments, getAllSettings, getAllHealthEpisodes, getAllMedicationIntakes,
+  mergeBackupData, getTrash, restoreTrashItem, permanentlyDeleteTrashItem
+} from "../db.js";
 import { getActiveTimer } from "../hours.js";
 
 export async function renderSettings(root) {
-  const clientId = (await getSetting("googleClientId")) || GOOGLE_CLIENT_ID;
-  const connected = isConnected();
-  const email = (await getStoredEmail()) || null;
   const count = (await getAllTasks()).length;
-  const lastSync = (await getSetting("lastSync")) || null;
 
   root.innerHTML = `
     <div class="settings-view">
       <h2 class="view-title">Ajustes</h2>
 
       <section class="settings-block">
-        <h3>Google Calendar</h3>
+        <h3>Copia de seguridad local</h3>
         <p class="hint">
-          Conecta tu cuenta para sincronizar tareas y citas entre dispositivos.
-          Los datos se guardan en tu calendario principal de Google.
+          Descarga un archivo JSON con todos tus datos (tareas, hábitos, proyectos, notas, salud, papelera...).
+          <strong>Nota:</strong> La sincronización entre dispositivos ahora es automática e instantánea gracias a Firebase, por lo que ya no necesitas conectar Google Drive.
         </p>
-
-        <div class="gcal-status ${connected ? "ok" : ""}">
-          ${connected
-            ? `✅ Conectado${email ? " como " + escapeHtml(email) : ""}`
-            : "Sin conectar"}
-        </div>
-
-        <div class="gcal-actions">
-          ${connected
-            ? `
-              <button class="btn-primary" id="btnImportGCAL">Importar solo eventos nuevos</button>
-              <button class="btn-ghost" id="btnFindDuplicates">Revisar duplicados importados</button>
-              <button class="btn-ghost" id="btnDisconnect">Desconectar</button>
-            `
-            : `<button class="btn-primary" id="btnConnect">Conectar con Google</button>`}
-        </div>
-
-        <p class="hint small" id="gcalMsg"></p>
-        <div id="duplicateReview" class="duplicate-review"></div>
-        ${lastSync ? `<p class="hint small">Última sincronización: ${escapeHtml(lastSync)}</p>` : ""}
-      </section>
-
-      <section class="settings-block" id="driveSyncBlock">
-        <h3>Sincronización entre dispositivos</h3>
-        <p class="hint">Sincroniza los datos de Papelegruba con el espacio privado appDataFolder de tu cuenta de Google. La cuenta elegida se recuerda en este dispositivo; no accede a tus archivos normales de Drive.</p>
-        <p class="hint" id="driveSyncAccountLabel">Consultando cuenta…</p>
-        <div class="gcal-actions">
-          <button class="btn-primary" id="btnDriveChooseAccount">Elegir cuenta de Google</button>
-          <button class="btn-ghost" id="btnDriveSyncDisconnect">Desvincular cuenta</button>
-        </div>
-        <div class="gcal-actions" style="margin-top:.6rem">
-          <button class="btn-primary" id="btnDriveSyncPreview">Analizar cambios</button>
-          <button class="btn-ghost" id="btnDriveSyncApply" disabled>Aplicar sincronización</button>
-        </div>
-        <p class="hint small" id="driveSyncMsg">La agenda intenta sincronizar automáticamente mientras está abierta y autorizada. Si caduca el acceso, al analizar cambios intentará reconectar con la cuenta recordada. No se puede garantizar sincronización con el navegador cerrado.</p>
-        <div id="driveSyncReview"></div>
-      </section>
-
-      <section class="settings-block">
-        <h3>Copia de seguridad completa</h3>
-        <p class="hint">Incluye tareas, Checklist, Hábitos, proyectos, notas, sesiones, facturación, ajustes, salud y papelera. La copia de Drive se actualiza automáticamente cuando hay cambios mientras Google mantiene la autorización activa; siempre se conserva una sola copia actualizada.</p>\n        <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
+        <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
+        
         <div class="gcal-actions">
           <button class="btn-ghost" id="btnExport">Descargar backup en este dispositivo</button>
           <button class="btn-ghost" id="btnImport">Restaurar archivo local</button>
         </div>
-        <div class="gcal-actions" style="margin-top:.6rem">
-          <button class="btn-primary" id="btnDriveBackup">Guardar backup en Google Drive</button>
-          <button class="btn-ghost" id="btnDriveList">Buscar copias en Drive</button>
-        </div>
-        <label class="fld-label" style="margin-top:.6rem">Copia de Drive
-          <select id="driveBackupSelect" style="width:100%;padding:.6rem;border:1px solid var(--c-border);border-radius:9px;background:#fff;color:var(--c-ink)"><option value="">Primero busca copias guardadas</option></select>
-        </label>
-        <button class="btn-ghost" id="btnDriveRestore">Restaurar copia seleccionada de Drive</button>
-        <p class="hint small" id="localMsg">La copia local se descarga como JSON. Drive requiere autorizar el acceso a archivos creados por Papelegruba.</p>
+        <p class="hint small" id="localMsg"></p>
       </section>
 
       <section class="settings-block">
@@ -98,309 +35,15 @@ export async function renderSettings(root) {
       </section>
 
       <section class="settings-block">
-        <h3>Avanzado</h3>
-        <label class="fld-label">Client ID de Google
-          <input id="clientId" type="text" value="${escapeAttr(clientId)}">
-        </label>
-        <button class="btn-ghost" id="saveClientId">Guardar Client ID</button>
-      </section>
-
-      <section class="settings-block">
         <h3>Acerca de</h3>
-        <p class="hint">Papelegruba · v0.2</p>
+        <p class="hint">Papelegruba · v0.3 (Firebase Edition)</p>
       </section>
     </div>
   `;
 
-  const msg = root.querySelector("#gcalMsg");
   const localMsg = root.querySelector("#localMsg");
-  window.addEventListener("papelegruba:backup-status", event => {
-    if (!localMsg) return;
-    const status = event.detail || {};
-    localMsg.textContent = status.ok
-      ? "Copia automática actualizada en Google Drive: " + new Date(status.at || Date.now()).toLocaleString("es-ES")
-      : "Copia automática pendiente: " + (status.message || "vuelve a autorizar Google Drive desde «Guardar backup en Google Drive». Los cambios siguen guardados localmente.");
-  });
-  let driveSyncPlan = null;
-  const driveSyncMsg = root.querySelector("#driveSyncMsg");
-  const driveSyncReview = root.querySelector("#driveSyncReview");
-  const driveSyncApplyButton = root.querySelector("#btnDriveSyncApply");
 
-  async function refreshDriveSyncAccountLabel() {
-    const account = await getDriveSyncAccount();
-    const label = root.querySelector("#driveSyncAccountLabel");
-    if (label) label.textContent = account.email
-      ? `Cuenta recordada: ${account.email}. Se intentará reutilizar esta cuenta y evitar pedir consentimiento de nuevo.`
-      : "No hay una cuenta de sincronización elegida.";
-  }
-  await refreshDriveSyncAccountLabel();
-
-  root.querySelector("#btnDriveChooseAccount")?.addEventListener("click", async () => {
-    driveSyncPlan = null;
-    driveSyncApplyButton.disabled = true;
-    driveSyncReview.innerHTML = "";
-    driveSyncMsg.textContent = "Abriendo selección de cuenta de Google…";
-    try {
-      const result = await connectDriveSync({ chooseAccount: true });
-      await refreshDriveSyncAccountLabel();
-      driveSyncMsg.textContent = `Cuenta autorizada: ${result.email || "Google"}. Ahora analiza los cambios.`;
-    } catch (error) {
-      driveSyncMsg.textContent = "No se ha conectado la cuenta: " + (error.message || error);
-    }
-  });
-
-  root.querySelector("#btnDriveSyncDisconnect")?.addEventListener("click", async () => {
-    if (!confirm("¿Desvincular la cuenta de este dispositivo? Los datos locales y el archivo remoto se conservarán.")) return;
-    await disconnectDriveSync();
-    driveSyncPlan = null;
-    driveSyncApplyButton.disabled = true;
-    driveSyncReview.innerHTML = "";
-    await refreshDriveSyncAccountLabel();
-    driveSyncMsg.textContent = "Cuenta desvinculada. No se han borrado datos.";
-  });
-
-  root.querySelector("#btnDriveSyncPreview")?.addEventListener("click", async () => {
-    driveSyncPlan = null;
-    driveSyncApplyButton.disabled = true;
-    driveSyncReview.innerHTML = "";
-    driveSyncMsg.textContent = "Comparando datos locales y de Drive…";
-    try {
-      let plan;
-      try {
-        plan = await previewDriveSync();
-      } catch (firstError) {
-        const message = firstError?.message || String(firstError);
-        if (!/autorización de Drive ha caducado|Elige primero una cuenta de Google/i.test(message)) throw firstError;
-        const account = await getDriveSyncAccount();
-        if (!account.email || !account.connected) throw firstError;
-        driveSyncMsg.textContent = "Renovando el acceso con la cuenta recordada…";
-        await connectDriveSync({ chooseAccount: false });
-        plan = await previewDriveSync();
-      }
-      driveSyncPlan = plan;
-      const localTotal = Object.values(plan.localCounts).reduce((a, b) => a + b, 0);
-      const remoteTotal = Object.values(plan.remoteCounts).reduce((a, b) => a + b, 0);
-      const mergedTotal = Object.values(plan.merged).reduce((a, list) => a + list.length, 0);
-      const detail = Object.keys(plan.localCounts).map(key =>
-        `<li><strong>${escapeHtml(key)}:</strong> local ${plan.localCounts[key]} · Drive ${plan.remoteCounts[key] || 0} · previsto ${plan.merged[key].length}</li>`
-      ).join("");
-      driveSyncReview.innerHTML = `
-        <div class="duplicate-review" style="margin-top:.75rem;padding:.75rem;border:1px solid var(--c-border);border-radius:10px">
-          <p><strong>Vista previa</strong></p>
-          <p class="hint small">Local: ${localTotal} registros · Drive: ${remoteTotal} · Resultado previsto: ${mergedTotal}</p>
-          <ul>${detail}</ul>
-          ${plan.conflicts.length
-            ? `<p class="hint"><strong>Conflictos detectados: ${plan.conflicts.length}.</strong> Al aplicar, prevalecerán los registros locales de Agenda HTML. Puedes guardar el informe para auditoría.</p><button type="button" class="btn-ghost" id="btnDriveSyncConflictReport">Descargar informe de conflictos</button>`
-            : '<p class="hint">No se han detectado conflictos. Las eliminaciones no se propagan.</p>'}
-          <p class="hint small">${plan.remoteExists ? "Archivo remoto encontrado." : "No existe aún un archivo remoto."} Se comprobará de nuevo antes de guardar.</p>
-        </div>`;
-      if (plan.conflicts.length) {
-        driveSyncMsg.textContent = "Se han detectado " + plan.conflicts.length + " conflictos. Al aplicar, Agenda HTML prevalecerá en esos registros.";
-        driveSyncReview.querySelector("#btnDriveSyncConflictReport")?.addEventListener("click", () => downloadConflictReport(plan.conflicts));
-      } else {
-        driveSyncMsg.textContent = "Revisa el resumen y confirma para aplicar.";
-      }
-      driveSyncApplyButton.disabled = false;
-    } catch (error) {
-      driveSyncMsg.textContent = "No se pudo analizar: " + (error.message || error);
-    }
-  });
-
-  driveSyncApplyButton?.addEventListener("click", async () => {
-    if (!driveSyncPlan || driveSyncPlan.conflicts.length) return;
-    const localTotal = Object.values(driveSyncPlan.localCounts).reduce((a, b) => a + b, 0);
-    const remoteTotal = Object.values(driveSyncPlan.remoteCounts).reduce((a, b) => a + b, 0);
-    const conflictNotice = driveSyncPlan.conflicts.length
-      ? `\n\nHay ${driveSyncPlan.conflicts.length} conflictos; en esos registros prevalecerá la versión local de Agenda HTML.`
-      : "";
-    if (!confirm(`Se sincronizarán los datos de Papelegruba. Local: ${localTotal}; Drive: ${remoteTotal}. No se propagarán eliminaciones. Si Drive ha cambiado desde la vista previa, se cancelará.${conflictNotice} ¿Continuar?`)) return;
-    driveSyncApplyButton.disabled = true;
-    driveSyncMsg.textContent = "Aplicando sincronización…";
-    try {
-      await applyDriveSync(driveSyncPlan);
-      driveSyncPlan = null;
-      driveSyncReview.innerHTML = "";
-      driveSyncMsg.textContent = "Sincronización completada. Los datos locales se conservan.";
-      setTimeout(() => renderSettings(root), 1200);
-    } catch (error) {
-      driveSyncMsg.textContent = "No se ha completado: " + (error.message || error);
-      driveSyncApplyButton.disabled = false;
-    }
-  });
-
-  /* Conectar */
-  root.querySelector("#btnConnect")?.addEventListener("click", async () => {
-    try {
-      await initGoogle();
-      await requestToken();
-      try { await fetchUserEmail(); } catch (e) {}
-      const msg = root.querySelector("#gcalMsg");
-      if (msg) msg.textContent = "Google conectado. Sincronizando Calendar y Checklist…";
-      try {
-        await syncGoogleData({ interactive: true });
-      } catch (syncError) {
-        if (msg) msg.textContent = "Conexión establecida, pero la sincronización no terminó: " + (syncError.message || syncError);
-        return;
-      }
-      renderSettings(root);
-    } catch (e) {
-      alert("Error al conectar:\n\n" + (e.message || e));
-    }
-  });
-
-  /* Desconectar */
-  root.querySelector("#btnDisconnect")?.addEventListener("click", async () => {
-    if (!confirm("¿Desconectar de Google Calendar?")) return;
-    disconnect();
-    renderSettings(root);
-  });
-
-  /* Importar desde Google Calendar */
-  root.querySelector("#btnImportGCAL")?.addEventListener("click", async () => {
-    if (!confirm(
-      "Se descargarán los eventos de Google Calendar desde 2025 hasta hoy.\n\n" +
-      "Solo se añadirán eventos que aún no estén importados. Los ya existentes no se actualizarán. " +
-      "También se eliminarán automáticamente las copias locales repetidas que tengan el mismo identificador de Google Calendar.\n\n" +
-      "No se borrará ningún evento de Google Calendar. ¿Continuar?"
-    )) return;
-
-    msg.textContent = "Descargando eventos de Google…";
-    try {
-      const events = await importAllEvents({
-        from: "2025-01-01T00:00:00Z",
-        onProgress: (n, page) => {
-          msg.textContent = `Descargados ${n} eventos (página ${page})…`;
-        }
-      });
-
-      msg.textContent = `Descargados ${events.length}. Comprobando los ya importados y limpiando duplicados locales…`;
-
-      const { addTask, getAllTasks } = await import("../db.js");
-      const existingTasks = await getAllTasks();
-      const groupsByGoogleId = new Map();
-      for (const task of existingTasks) {
-        if (!task.gcalEventId || task.isChecklist) continue;
-        if (!groupsByGoogleId.has(task.gcalEventId)) groupsByGoogleId.set(task.gcalEventId, []);
-        groupsByGoogleId.get(task.gcalEventId).push(task);
-      }
-
-      // Mantener una sola tarea por evento de Google. Preferimos la que conserva
-      // estado de finalización y, después, la más antigua; eliminamos solo copias
-      // locales con el mismo gcalEventId, nunca eventos del calendario remoto.
-      const byGoogleId = new Map();
-      let removedDuplicates = 0;
-      for (const [googleId, group] of groupsByGoogleId) {
-        group.sort((a, b) => {
-          const doneDiff = Number(!!b.done) - Number(!!a.done);
-          if (doneDiff) return doneDiff;
-          return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
-        });
-        byGoogleId.set(googleId, group[0]);
-        for (const duplicate of group.slice(1)) {
-          await deleteTaskLocalOnly(duplicate.id);
-          removedDuplicates++;
-        }
-      }
-
-      let created = 0;
-      let alreadyPresent = 0;
-      let skipped = 0;
-      const seenInThisImport = new Set();
-      for (const ev of events) {
-        if (!ev?.id || !ev.start?.dateTime && !ev.start?.date) { skipped++; continue; }
-        if (seenInThisImport.has(ev.id)) {
-          alreadyPresent++;
-          continue;
-        }
-        seenInThisImport.add(ev.id);
-        if (byGoogleId.has(ev.id)) {
-          alreadyPresent++;
-          continue;
-        }
-        const task = gcalEventToTask(ev);
-        if (!task.date) { skipped++; continue; }
-        const added = await addTask(task);
-        byGoogleId.set(ev.id, added);
-        created++;
-      }
-
-      await setSetting("lastSync", new Date().toLocaleString("es-ES"));
-      msg.textContent = `Importación terminada: ${created} eventos nuevos añadidos, ${alreadyPresent} ya existentes omitidos, ${removedDuplicates} duplicados locales eliminados y ${skipped} eventos omitidos. Los eventos existentes no se han actualizado y no se ha borrado nada de Google Calendar.`;
-
-      setTimeout(() => renderSettings(root), 1800);
-    } catch (e) {
-      msg.textContent = "❌ Error: " + (e.message || e);
-    }
-  });
-
-  /* Revisar y eliminar duplicados importados, uno por uno */
-  root.querySelector("#btnFindDuplicates")?.addEventListener("click", async () => {
-    const panel = root.querySelector("#duplicateReview");
-    panel.innerHTML = "Buscando duplicados…";
-    try {
-      const tasks = (await getAllTasks()).filter(t => t.gcalEventId && !t.isChecklist);
-      const groups = new Map();
-      for (const task of tasks) {
-        if (!groups.has(task.gcalEventId)) groups.set(task.gcalEventId, []);
-        groups.get(task.gcalEventId).push(task);
-      }
-      // Conservar una copia por evento: priorizar finalizadas y, después, la más antigua.
-      const duplicates = [...groups.values()].filter(group => group.length > 1).flatMap(group => {
-        group.sort((a, b) => {
-          const doneDiff = Number(!!b.done) - Number(!!a.done);
-          if (doneDiff) return doneDiff;
-          return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
-        });
-        return group.slice(1);
-      });
-      if (!duplicates.length) { panel.innerHTML = '<p class="hint small">No se han encontrado duplicados con el mismo identificador de Google Calendar.</p>'; return; }
-      panel.innerHTML = '<h4>Duplicados detectados: ' + duplicates.length + '</h4><p class="hint small">Se conservará la copia preferente de cada evento. La limpieza afecta solo a registros locales; no elimina eventos de Google Calendar.</p><button class="btn-primary" id="btnDeleteAllDuplicates" type="button">Eliminar todos los duplicados (' + duplicates.length + ')</button><div class="duplicate-list" style="margin-top:.75rem">' + duplicates.map(t => '<article class="duplicate-item" data-task-id="' + escapeAttr(t.id) + '" style="display:flex;justify-content:space-between;gap:.75rem;align-items:center;padding:.6rem 0;border-bottom:1px solid var(--c-border)"><div><strong>' + escapeHtml(t.title || "Evento sin título") + '</strong><small style="display:block">' + escapeHtml(t.date || "Sin fecha") + (t.time ? " · " + escapeHtml(t.time) : "") + '</small></div><button class="btn-ghost duplicate-delete" type="button">Eliminar esta copia</button></article>').join("") + '</div>';
-      const updateDuplicateCount = () => {
-        const remaining = panel.querySelectorAll(".duplicate-item").length;
-        const heading = panel.querySelector("h4");
-        const bulk = panel.querySelector("#btnDeleteAllDuplicates");
-        if (heading) heading.textContent = "Duplicados pendientes: " + remaining;
-        if (bulk) { bulk.textContent = "Eliminar todos los duplicados (" + remaining + ")"; bulk.disabled = remaining === 0; }
-        if (!remaining) panel.innerHTML = '<p class="hint small">Revisión terminada. No quedan copias adicionales en esta lista.</p>';
-      };
-      panel.querySelector("#btnDeleteAllDuplicates")?.addEventListener("click", async () => {
-        const remainingItems = [...panel.querySelectorAll(".duplicate-item")];
-        if (!remainingItems.length) return;
-        if (!confirm('¿Eliminar ' + remainingItems.length + ' copias duplicadas solo de este dispositivo? Se conservará una copia por evento y no se borrará ni modificará Google Calendar.')) return;
-        const bulk = panel.querySelector("#btnDeleteAllDuplicates");
-        if (bulk) bulk.disabled = true;
-        try {
-          for (const item of remainingItems) {
-            await deleteTaskLocalOnly(item.dataset.taskId);
-            item.remove();
-          }
-          const remainingTasks = await getAllTasks();
-          const countEl = root.querySelector("#taskCount");
-          if (countEl) countEl.textContent = remainingTasks.length;
-          updateDuplicateCount();
-        } catch (error) {
-          if (bulk) bulk.disabled = false;
-          const errorEl = document.createElement("p");
-          errorEl.className = "hint small";
-          errorEl.textContent = "La limpieza se ha detenido: " + (error.message || error) + ". Vuelve a revisar los duplicados antes de continuar.";
-          panel.prepend(errorEl);
-        }
-      });
-      panel.querySelectorAll(".duplicate-delete").forEach(button => {
-        button.addEventListener("click", async () => {
-          const item = button.closest(".duplicate-item");
-          const task = duplicates.find(t => t.id === item.dataset.taskId);
-          if (!task || !confirm('¿Eliminar solo esta copia de "' + (task.title || "evento") + '" del dispositivo? No se borrará el evento de Google Calendar.')) return;
-          await deleteTaskLocalOnly(task.id);
-          item.remove();
-          const remainingTasks = await getAllTasks();
-          const countEl = root.querySelector("#taskCount");
-          if (countEl) countEl.textContent = remainingTasks.length;
-          updateDuplicateCount();
-        });
-      });
-    } catch (e) { panel.textContent = "No se pudieron revisar los duplicados: " + (e.message || e); }
-  });
+  /* Papelera */
   root.querySelector("#btnShowTrash")?.addEventListener("click", refreshTrash);
   async function refreshTrash() {
     const panel = root.querySelector("#trashReview");
@@ -437,17 +80,12 @@ export async function renderSettings(root) {
     } catch (error) { panel.textContent = "No se pudo abrir la papelera: " + (error.message || error); }
   }
 
-  /* Guardar Client ID */
-  root.querySelector("#saveClientId").addEventListener("click", async () => {
-    const v = root.querySelector("#clientId").value.trim();
-    if (!v) { alert("Pega un Client ID válido"); return; }
-    await setSetting("googleClientId", v);
-    alert("Client ID guardado. Recarga la app para aplicarlo.");
-  });
-
   /* Exportar JSON */
   root.querySelector("#btnExport").onclick = async () => {
-    const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash()]);
+    const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash] = await Promise.all([
+      getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(),
+      getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash()
+    ]);
     const payload = {
       format: "papelegruba-backup",
       version: 4,
@@ -455,10 +93,7 @@ export async function renderSettings(root) {
       activeTimer: getActiveTimer(),
       tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash
     };
-    const blob = new Blob(
-      [JSON.stringify(payload, null, 2)],
-      { type: "application/json" }
-    );
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -467,63 +102,6 @@ export async function renderSettings(root) {
     URL.revokeObjectURL(url);
   };
 
-  /* Copia completa en Google Drive */
-  root.querySelector("#btnDriveBackup").onclick = async () => {
-    localMsg.textContent = "Conectando con Google Drive…";
-    try {
-      await initGoogle();
-      await requestToken();
-      const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash] = await Promise.all([getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(), getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash()]);
-      const payload = { format: "papelegruba-backup", version: 4, exportedAt: new Date().toISOString(), activeTimer: getActiveTimer(), tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash };
-      const file = await uploadBackupToDrive(payload);
-      localMsg.textContent = "Copia verificada en Google Drive: " + (file.name || "Papelegruba") + (file.modifiedTime ? " · actualizada " + new Date(file.modifiedTime).toLocaleString("es-ES") : "") + ". Se conserva una única copia actualizada.";
-      await refreshDriveBackups();
-    } catch (e) { localMsg.textContent = "Error guardando en Drive: " + (e.message || e); }
-  };
-
-  root.querySelector("#btnDriveList").onclick = refreshDriveBackups;
-
-  async function refreshDriveBackups() {
-    localMsg.textContent = "Buscando copias en Drive…";
-    try {
-      await initGoogle();
-      await requestToken();
-      const files = await listBackupsOnDrive();
-      const select = root.querySelector("#driveBackupSelect");
-      select.innerHTML = "";
-      const first = document.createElement("option");
-      first.value = ""; first.textContent = files.length ? "Selecciona una copia…" : "No hay copias de Papelegruba en Drive";
-      select.appendChild(first);
-      files.forEach(file => {
-        const option = document.createElement("option");
-        option.value = file.id;
-        const savedAt = file.modifiedTime || file.createdTime;
-        option.textContent = (file.name || "Backup") + (savedAt ? " · actualizada: " + new Date(savedAt).toLocaleString("es-ES") : "");
-        select.appendChild(option);
-      });
-      localMsg.textContent = files.length ? "Encontradas " + files.length + " copias." : "No hay copias guardadas por Papelegruba en Drive.";
-    } catch (e) { localMsg.textContent = "Error buscando copias: " + (e.message || e); }
-  }
-
-  root.querySelector("#btnDriveRestore").onclick = async () => {
-    const fileId = root.querySelector("#driveBackupSelect").value;
-    if (!fileId) { localMsg.textContent = "Selecciona primero una copia de Drive."; return; }
-    if (!confirm("Se combinará la copia con los datos de este dispositivo. Los registros con la misma ID se actualizarán y no se borrarán datos. ¿Continuar?")) return;
-    localMsg.textContent = "Descargando copia de Drive…";
-    try {
-      await initGoogle();
-      await requestToken();
-      const raw = await downloadBackupFromDrive(fileId);
-      const data = JSON.parse(raw);
-      if (data.format !== "papelegruba-backup") throw new Error("El archivo no es una copia de Papelegruba.");
-      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes", "trash"];
-      const total = collections.reduce((sum, key) => sum + (Array.isArray(data[key]) ? data[key].length : 0), 0);
-      if (!total) throw new Error("La copia no contiene datos reconocibles.");
-      const result = await mergeBackupData(data);
-      restoreTimerFromBackup(data);
-      localMsg.textContent = "Restauración completada: " + result.imported + " registros nuevos añadidos; " + result.skippedExisting + " ya existentes o duplicados omitidos. No se han sobrescrito los registros locales existentes.";
-    } catch (e) { localMsg.textContent = "Error restaurando desde Drive: " + (e.message || e); }
-  };
   /* Importar JSON */
   root.querySelector("#btnImport").onclick = () => {
     const inp = document.createElement("input");
