@@ -12,7 +12,73 @@
   <link rel="preconnect" href="https://www.googleapis.com">
   <link rel="stylesheet" href="styles.css">
 </head>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+  import { 
+    getFirestore, collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp 
+  } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
+  // Configuración COMPLETA (con tus claves)
+  const firebaseConfig = {
+    apiKey: "AIzaSyAfwZwOB90JNgQ1hewbTGwVsyrDK-GYvPg",
+    authDomain: "agenda-html-511217-90781.firebaseapp.com",
+    projectId: "agenda-html-511217-90781",
+    storageBucket: "agenda-html-511217-90781.firebasestorage.app",
+    messagingSenderId: "313777943876",
+    appId: "1:313777943876:web:83677168f68b8c62e41311"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const tareasCol = collection(db, "tareas");
+
+  // 1. SINCRONIZACIÓN EN TIEMPO REAL
+  onSnapshot(tareasCol, (snapshot) => {
+    const tareas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    
+    // Si tienes una función que pinta las tareas, se llamará aquí automáticamente
+    if (typeof renderizarAgenda === "function") {
+      renderizarAgenda(tareas);
+    } else {
+      console.log("Tareas sincronizadas (no hay función renderizarAgenda):", tareas);
+    }
+  });
+
+  // 2. GUARDAR TAREA (Exponemos la función para que la uses en tus botones)
+  window.guardarTarea = async (titulo, fecha, hora, descripcion) => {
+    try {
+      await addDoc(tareasCol, {
+        titulo: titulo, 
+        fecha: fecha, 
+        hora: hora, 
+        descripcion: descripcion, 
+        calendarEventId: null, // Nace sin ID de Calendar
+        creado: serverTimestamp()
+      });
+      console.log("Tarea guardada en Firestore");
+    } catch (error) {
+      console.error("Error al guardar: ", error);
+    }
+  };
+
+  // 3. ACTUALIZAR TAREA
+  window.actualizarTarea = async (id, datosNuevos) => {
+    try {
+      await updateDoc(doc(db, "tareas", id), datosNuevos);
+    } catch (error) {
+      console.error("Error al actualizar: ", error);
+    }
+  };
+
+  // 4. BORRAR TAREA
+  window.borrarTarea = async (id) => {
+    try {
+      await deleteDoc(doc(db, "tareas", id));
+    } catch (error) {
+      console.error("Error al borrar: ", error);
+    }
+  };
+</script>
 <body>
   <header class="app-header">
     <nav class="view-switch-top" aria-label="Herramientas">
