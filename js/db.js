@@ -1,742 +1,327 @@
-function emitTaskChange(action, task) {
-  try { window.dispatchEvent(new CustomEvent("papelegruba:task-change", { detail: { action, task } })); } catch (_) {}
-}
+import { GOOGLE_CLIENT_ID, GOOGLE_SCOPES, DEFAULT_CALENDAR_ID } from "../config.js";
+import { getSetting, setSetting } from "./db.js";
 
-const DB_NAME = "papelegruba";
-const DB_VERSION = 4;
-let dbPromise;
+let tokenClient = null;
+let accessToken = null;
+let tokenExpiresAt = 0;
+let currentEmail = null;
 
-export function initDB() {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = e => {
-      const db = e.target.result;
+const CAL_API = "https://www.googleapis.com/calendar/v3";
+const DRIVE_API = "https://www.googleapis.com/drive/v3";
+const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3";
 
-      const mk = (name, opts = { keyPath: "id" }) => {
-        if (!db.objectStoreNames.contains(name)) {
-          return db.createObjectStore(name, opts);
-        }
-        return null;
-      };
-
-      if (!db.objectStoreNames.contains("tasks")) {
-        const s = db.createObjectStore("tasks", { keyPath: "id" });
-        s.createIndex("by_date", "date");
-        s.createIndex("by_type", "type");
-        s.createIndex("by_date_type", ["date", "type"]);
-      }
-
-      mk("projects");
-      mk("notes");
-      mk("habits");
-      mk("healthEpisodes");
-      mk("medicationIntakes");
-      mk("trash");
-
-      if (!db.objectStoreNames.contains("sessions")) {
-        const s = db.createObjectStore("sessions", { keyPath: "id" });
-        s.createIndex("by_date", "date");
-        s.createIndex("by_category", "categoryId");
-      }
-
-      if (!db.objectStoreNames.contains("payments")) {
-        const p = db.createObjectStore("payments", { keyPath: "id" });
-        p.createIndex("by_date", "date");
-        p.createIndex("by_category", "categoryId");
-      }
-
-      if (!db.objectStoreNames.contains("settings")) {
-        db.createObjectStore("settings", { keyPath: "key" });
-      }
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-  return dbPromise;
-}
-
-async function tx(store, mode, fn) {
-  const db = await initDB();
+function loadGis() {
+  if (window.google?.accounts?.oauth2) return Promise.resolve();
   return new Promise((resolve, reject) => {
-    const t = db.transaction(store, mode);
-    const s = t.objectStore(store);
-    const out = fn(s);
-    t.oncomplete = () => {
-      if (mode === "readwrite") {
-        try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: Array.isArray(store) ? store.join(",") : store } })); } catch (_) {}
-      }
-      resolve(out?.result ?? out);
-    };
-    t.onerror = () => reject(t.error);
+    const s = document.createElement("script");
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.defer = true;
+    s.onload = resolve;
+    s.onerror = () => reject(new Error("No se pudo cargar Google Identity Services"));
+    document.head.appendChild(s);
   });
 }
 
-const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
-
-/* ============ TAREAS ============ */
-export async function addTask(partial) {
-  const now = new Date().toISOString();
-
-  // Ignoramos cualquier id que venga en el partial
-  const { id: _ignoredId, ...safePartial } = partial || {};
-
-  // --- COMPROBADOR INTELIGENTE DE DUPLICADOS ---
-  if (safePartial.title && safePartial.date) {
-    const tareasExistentes = await getTasksByDate(safePartial.date);
-    
-    const tituloLimpio = safePartial.title.trim().toLowerCase();
-    const notasLimpias = (safePartial.notes || "").trim().toLowerCase();
-    const hora = safePartial.time || "";
-
-    // Buscamos tareas que tengan el mismo título en la misma fecha
-    const coincidencias = tareasExistentes.filter(t => 
-      (t.title || "").trim().toLowerCase() === tituloLimpio
-    );
-
-    if (coincidencias.length > 0) {
-      // 1. Comprobar si es un clon exacto (Mismo título, misma hora y mismas notas)
-      const esClonExacto = coincidencias.some(t => 
-        (t.time || "") === hora && 
-        (t.notes || "").trim().toLowerCase() === notasLimpias
-      );
-
-      if (esClonExacto) {
-        console.warn("Bloqueado: Es un clon exacto de una tarea existente.");
-        return null; // Se ignora en silencio
-      }
-
-      // 2. Si coincide el título y la fecha, pero la hora o las notas son distintas:
-      // Le preguntamos al usuario.
-      const confirmar = confirm(`Ya existe una tarea llamada "${safePartial.title}" para el día ${safePartial.date}.\n\n¿Quieres crearla de todos modos? (Si aceptas, se creará otra tarea diferente).`);
-      
-      if (!confirmar) {
-        console.log("Creación cancelada por el usuario.");
-        return null; // El usuario le dio a Cancelar
-      }
-    }
-  }
-  // ---------------------------------------------
-
-  const task = {
-    id: uid(),
-    type: "personal", title: "", notes: "",
-    date: "", time: "", endTime: "", duration: 25,
-    projectId: null, tags: [], priority: 0,
-    done: false, doneAt: null,
-    createdAt: now, updatedAt: now, gcalEventId: null,
-    ...safePartial
-  };
-
-  // Sanear para IndexedDB
-  if (!task.id) task.id = uid();
-  if (task.date === null || task.date === undefined) task.date = "";
-  if (typeof task.date !== "string") task.date = String(task.date);
-  if (task.isChecklist === true) {
-    if (typeof task.type !== "string") task.type = "";
-  } else if (!task.type || typeof task.type !== "string") {
-    task.type = "personal";
-  }
-
-  await tx("tasks", "readwrite", s => s.put(task));
-  emitTaskChange("upsert", task);
-  return task;
+async function getClientId() {
+  return (await getSetting("googleClientId")) || GOOGLE_CLIENT_ID;
 }
 
-export async function updateTask(id, patch) {
-  const db = await initDB();
+export async function initGoogle() {
+  await loadGis();
+  const clientId = await getClientId();
+
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: GOOGLE_SCOPES,
+    callback: () => {}
+  });
+}
+
+export async function requestToken({ silent = false } = {}) {
+  if (accessToken && Date.now() < tokenExpiresAt - 60000) {
+    return accessToken;
+  }
+  if (!tokenClient) await initGoogle();
+
   return new Promise((resolve, reject) => {
-    const t = db.transaction("tasks", "readwrite");
-    const s = t.objectStore("tasks");
-    const req = s.get(id);
-    req.onsuccess = () => {
-      // No crear accidentalmente un registro nuevo sin clave si el ID no existe.
-      if (!req.result) {
-        reject(new Error(`No existe la tarea ${id}; no se ha guardado ningún cambio.`));
+    tokenClient.callback = (resp) => {
+      if (resp.error) {
+        reject(new Error(resp.error));
         return;
       }
-      const merged = { ...req.result, ...(patch && typeof patch === "object" ? patch : {}), id, updatedAt: new Date().toISOString() };
-
-      // Sanear
-      if (merged.date === null || merged.date === undefined) merged.date = "";
-      if (typeof merged.date !== "string") merged.date = String(merged.date);
-      if (merged.isChecklist === true) {
-        if (typeof merged.type !== "string") merged.type = "";
-      } else if (!merged.type || typeof merged.type !== "string") {
-        merged.type = "personal";
-      }
-
-      s.put(merged);
-      t.oncomplete = () => { emitTaskChange("upsert", merged); resolve(merged); };
+      accessToken = resp.access_token;
+      tokenExpiresAt = Date.now() + (resp.expires_in || 3600) * 1000;
+      setSetting("googleConnected", true);
+      resolve(accessToken);
     };
-    req.onerror = () => reject(req.error);
-    t.onerror = () => reject(t.error);
+    tokenClient.requestAccessToken({
+      prompt: silent || accessToken ? "" : "consent"
+    });
   });
 }
 
-export async function deleteTask(id) {
-  const all = await getAllTasks();
-  const existing = all.find(task => task.id === id);
-  if (existing) await moveToTrash("tasks", existing);
-  if (existing) emitTaskChange("delete", existing);
+export function isConnected() {
+  return !!accessToken && Date.now() < tokenExpiresAt - 60000;
 }
 
-// Eliminación estrictamente local para limpiar copias redundantes que comparten
-// el mismo ID remoto. No emite eventos de sincronización ni borra nada en Google.
-export async function deleteTaskLocalOnly(id) {
-  return tx("tasks", "readwrite", s => s.delete(id));
+export async function getStoredEmail() {
+  return await getSetting("googleEmail");
 }
 
-export async function getTasksByDate(dateStr) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const idx = db.transaction("tasks").objectStore("tasks").index("by_date");
-    const req = idx.getAll(IDBKeyRange.only(dateStr));
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function getTasksInRange(fromStr, toStr) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const idx = db.transaction("tasks").objectStore("tasks").index("by_date");
-    const req = idx.getAll(IDBKeyRange.bound(fromStr, toStr));
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function getAllTasks() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("tasks").objectStore("tasks").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function getMedicalInRange(fromStr, toStr) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const idx = db.transaction("tasks").objectStore("tasks").index("by_date_type");
-    const req = idx.getAll(IDBKeyRange.bound([fromStr, "medical"], [toStr, "medical"]));
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function getUpcomingMedical(limit = 5) {
-  const all = await getAllTasks();
-  const today = new Date().toISOString().slice(0, 10);
-  return all
-    .filter(t => t.type === "medical" && t.isChecklist !== true && !t.done && t.date && t.date >= today)
-    .sort((a, b) => (a.date + (a.time || "")).localeCompare(b.date + (b.time || "")))
-    .slice(0, limit);
-}
-
-/* ============ AJUSTES ============ */
-export async function getSetting(key) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("settings").objectStore("settings").get(key);
-    req.onsuccess = () => resolve(req.result?.value ?? null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function setSetting(key, value) {
-  await tx("settings", "readwrite", s => s.put({ key, value }));
-}
-
-/* ============ PROYECTOS ============ */
-export async function addProject(partial = {}) {
-  const now = new Date().toISOString();
-  const project = {
-    name: "", color: "#C9A7E8", archived: false,
-    createdAt: now, ...(partial && typeof partial === "object" ? partial : {})
-  };
-  // La clave se genera después de extender los datos recibidos para impedir
-  // que un id ausente/undefined enviado por un formulario anule la clave.
-  project.id = uid();
-  await tx("projects", "readwrite", s => s.put(project));
-  return project;
-}
-
-export async function getAllProjects() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("projects").objectStore("projects").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-/* ============ SESIONES DE TIEMPO ============ */
-export async function addSession(partial) {
-  const now = new Date().toISOString();
-  const session = {
-    id: uid(),
-    date: now.slice(0, 10),
-    startTime: "00:00",
-    endTime: "00:00",
-    durationMinutes: 0,
-    categoryId: "personal",
-    taskId: null,
-    taskTitle: null,
-    description: "",
-    billable: false,
-    rate: 0,
-    amount: 0,
-    billed: false,
-    billedAt: null,
-    adjustment: false,
-    createdAt: now,
-    ...(partial && typeof partial === "object" ? partial : {})
-  };
-  session.id = uid();
-  await tx("sessions", "readwrite", s => s.put(session));
-  return session;
-}
-
-export async function updateSession(id, patch) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction("sessions", "readwrite");
-    const s = t.objectStore("sessions");
-    const req = s.get(id);
-    req.onsuccess = () => {
-      if (!req.result) {
-        try { t.abort(); } catch (_) {}
-        reject(new Error(`No existe la sesión ${id}; no se ha guardado ningún cambio.`));
-        return;
-      }
-      const merged = { ...req.result, ...(patch && typeof patch === "object" ? patch : {}), id };
-      s.put(merged);
-      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "sessions" } })); } catch (_) {} resolve(merged); };
-    };
-    req.onerror = () => reject(req.error);
-    t.onerror = () => reject(t.error);
-  });
-}
-
-export async function deleteSession(id) {
-  const all = await getAllSessions();
-  const item = all.find(x => x.id === id);
-  if (item) await moveToTrash("sessions", item);
-}
-
-export async function getAllSessions() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("sessions").objectStore("sessions").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function getSessionsByCategory(categoryId) {
-  const all = await getAllSessions();
-  return all.filter(s => s.categoryId === categoryId);
-}
-
-/* ============ COBROS ============ */
-export async function addPayment(partial) {
-  const now = new Date().toISOString();
-  const payment = {
-    id: uid(),
-    date: now.slice(0, 10),
-    amount: 0,
-    categoryId: "work-sye",
-    method: "otro",
-    note: "",
-    appliedToSessions: [],
-    createdAt: now,
-    ...(partial && typeof partial === "object" ? partial : {})
-  };
-  payment.id = uid();
-  await tx("payments", "readwrite", s => s.put(payment));
-  return payment;
-}
-
-export async function updatePayment(id, patch) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction("payments", "readwrite");
-    const s = t.objectStore("payments");
-    const req = s.get(id);
-    req.onsuccess = () => {
-      if (!req.result) {
-        try { t.abort(); } catch (_) {}
-        reject(new Error(`No existe el cobro ${id}; no se ha guardado ningún cambio.`));
-        return;
-      }
-      const merged = { ...req.result, ...(patch && typeof patch === "object" ? patch : {}), id };
-      s.put(merged);
-      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "payments" } })); } catch (_) {} resolve(merged); };
-    };
-    req.onerror = () => reject(req.error);
-    t.onerror = () => reject(t.error);
-  });
-}
-
-export async function deletePayment(id) {
-  const all = await getAllPayments();
-  const item = all.find(x => x.id === id);
-  if (item) await moveToTrash("payments", item);
-}
-
-export async function getAllPayments() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("payments").objectStore("payments").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-
-/* ============ HÁBITOS Y CHECKLIST ============ */
-export async function addHabit(partial = {}) {
-  const now = new Date().toISOString();
-  const { id: _ignoredId, ...safe } = partial || {};
-  const habit = { id: uid(), title: "", notes: "", type: "personal", sourceTaskId: null, done: false, doneAt: null, active: true, createdAt: now, updatedAt: now, ...safe };
-  await tx("habits", "readwrite", s => s.add(habit));
-  return habit;
-}
-
-export async function getAllHabits() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("habits").objectStore("habits").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function updateHabit(id, patch) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction("habits", "readwrite");
-    const store = t.objectStore("habits");
-    const req = store.get(id);
-    req.onsuccess = () => {
-      if (!req.result) { reject(new Error(`No existe el hábito ${id}`)); return; }
-      const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
-      store.put(merged);
-      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "habits" } })); } catch (_) {} resolve(merged); };
-    };
-    req.onerror = () => reject(req.error);
-    t.onerror = () => reject(t.error);
-  });
-}
-
-export async function deleteHabit(id) {
-  const all = await getAllHabits();
-  const item = all.find(h => h.id === id);
-  if (item) await moveToTrash("habits", item);
-}
-
-/* Conversión idempotente: la comprobación y la escritura se realizan en una única
-   transacción de ambos almacenes, evitando duplicados por doble clic. */
-export async function convertTaskToHabit(taskId) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction(["tasks", "habits"], "readwrite");
-    const tasks = t.objectStore("tasks");
-    const habits = t.objectStore("habits");
-    let result = null;
-    let failure = null;
-    const req = tasks.get(taskId);
-    req.onsuccess = () => {
-      const task = req.result;
-      if (!task) { failure = new Error(`No existe la tarea ${taskId}`); t.abort(); return; }
-      const allReq = habits.getAll();
-      allReq.onsuccess = () => {
-        const existing = allReq.result.find(h => h.id === task.habitId || h.sourceTaskId === task.id);
-        if (existing) {
-          if (task.habitId !== existing.id) tasks.put({ ...task, habitId: existing.id, updatedAt: new Date().toISOString() });
-          result = existing;
-          return;
-        }
-        const now = new Date().toISOString();
-        const habit = { id: uid(), title: task.title || "", notes: task.notes || "", type: task.type || "personal", sourceTaskId: task.id, done: false, doneAt: null, active: true, createdAt: now, updatedAt: now };
-        habits.add(habit);
-        tasks.put({ ...task, habitId: habit.id, updatedAt: now });
-        result = habit;
-      };
-      allReq.onerror = () => { failure = allReq.error; t.abort(); };
-    };
-    req.onerror = () => { failure = req.error; t.abort(); };
-    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "habits" } })); } catch (_) {} resolve(result); };
-    t.onabort = () => reject(failure || t.error || new Error("No se pudo convertir la tarea en hábito"));
-    t.onerror = () => reject(failure || t.error);
-  });
-}
-
-/* Importación de respaldo por combinación, conservando IDs y enlaces. No borra datos existentes. */
-/* Importación idempotente de respaldos: conserva los registros locales existentes,
-   evita IDs repetidos y evita importar otra tarea/evento con el mismo nombre y contexto. */
-function normalizeDuplicateText(value) {
-  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("es").replace(/[^a-z0-9]+/g, " ").trim();
-}
-function backupRecordName(collection, item) {
-  if (!item || typeof item !== "object") return "";
-  if (collection === "tasks") return normalizeDuplicateText(item.title || item.name);
-  if (collection === "projects" || collection === "habits") return normalizeDuplicateText(item.name || item.title);
-  if (collection === "notes") return normalizeDuplicateText(item.title || item.name);
-  if (collection === "healthEpisodes") return normalizeDuplicateText(item.title || item.type);
-  if (collection === "medicationIntakes") return normalizeDuplicateText(item.medication || item.name || item.title);
-  return "";
-}
-function backupDuplicateKey(collection, item) {
-  const name = backupRecordName(collection, item);
-  if (!name) return "";
-  // Las tareas solo son duplicadas si coinciden título, fecha y notas.
-  // Un título compartido con distinta fecha o notas representa otro registro.
-  if (collection === "tasks") {
-    const date = normalizeDuplicateText(item.date || item.dueDate || item.startDate || item.startAt || "");
-    const notes = normalizeDuplicateText(item.notes || item.note || item.description || "");
-    return [name, date, notes].join("|");
+export function disconnect() {
+  if (accessToken && window.google?.accounts?.oauth2) {
+    try { google.accounts.oauth2.revoke(accessToken); } catch (_) {}
   }
-  if (collection === "projects" || collection === "habits" || collection === "notes") return name;
-  return name + "|" + String(item.date || item.startAt || item.createdAt || "");
+  accessToken = null;
+  tokenExpiresAt = 0;
+  currentEmail = null;
+  setSetting("googleConnected", false);
+  setSetting("googleEmail", null);
 }
-export async function mergeBackupData(data) {
-  const db = await initDB();
-  const storeNames = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes", "trash"];
-  const payload = Object.fromEntries(storeNames.map(name => [name, Array.isArray(data?.[name]) ? data[name] : []]));
-  return new Promise((resolve, reject) => {
-    const t = db.transaction(storeNames, "readwrite");
-    const existing = {};
-    let imported = 0, skippedExisting = 0, invalid = 0;
-    for (const name of storeNames) {
-      const store = t.objectStore(name);
-      const req = store.getAll();
-      req.onsuccess = () => {
-        existing[name] = req.result || [];
-        const existingIds = new Set(existing[name].map(item => name === "settings" ? item.key : String(item.id)));
-        const existingNames = new Set(existing[name].map(item => backupDuplicateKey(name, item)).filter(Boolean));
-        const incomingIds = new Set();
-        for (const item of payload[name]) {
-          if (!item || typeof item !== "object" || (name === "settings" ? typeof item.key !== "string" : item.id == null || item.id === "")) {
-            invalid++;
-            continue;
-          }
-          const id = name === "settings" ? item.key : String(item.id);
-          const duplicateKey = backupDuplicateKey(name, item);
-          if (existingIds.has(id) || incomingIds.has(id) || (duplicateKey && existingNames.has(duplicateKey))) {
-            skippedExisting++;
-            continue;
-          }
-          store.put(item);
-          imported++;
-          existingIds.add(id);
-          incomingIds.add(id);
-          if (duplicateKey) existingNames.add(duplicateKey);
-        }
-      };
-      req.onerror = () => { try { t.abort(); } catch (_) {} };
+
+async function api(path, init = {}) {
+  if (!accessToken || Date.now() >= tokenExpiresAt - 60000) {
+    throw new Error("Token no disponible. Conecta con Google primero.");
+  }
+  const res = await fetch(`${CAL_API}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      ...(init.headers || {})
     }
-    t.oncomplete = () => {
-      try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "restore" } })); } catch (_) {}
-      resolve({ imported, skippedExisting, invalid, total: imported + skippedExisting + invalid });
-    };
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error || new Error("No se pudo restaurar el respaldo"));
   });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Google API ${res.status}: ${txt}`);
+  }
+  return res.status === 204 ? null : res.json();
 }
-// Sustituye atómicamente las colecciones compartidas por el resultado ya conciliado
-// de Drive. Se usa solo en sincronización entre dispositivos, no en restauraciones JSON.
-export async function replaceSyncedCollections(data) {
-  const db = await initDB();
-  const names = ["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes", "trash"];
-  return new Promise((resolve, reject) => {
-    const t = db.transaction(names, "readwrite");
-    let count = 0;
-    for (const name of names) {
-      const store = t.objectStore(name);
-      store.clear();
-      for (const item of Array.isArray(data[name]) ? data[name] : []) {
-        if (!item || typeof item !== "object" || item.id == null || item.id === "") continue;
-        store.put(item);
-        count++;
-      }
+
+export async function fetchUserEmail() {
+  const info = await api("/users/me/calendarList?maxResults=1");
+  currentEmail = info.items?.[0]?.id || null;
+  if (currentEmail) await setSetting("googleEmail", currentEmail);
+  return currentEmail;
+}
+
+export async function listEvents({ timeMin, timeMax, calendarId = DEFAULT_CALENDAR_ID }) {
+  const params = new URLSearchParams({
+    timeMin,
+    timeMax,
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "250"
+  });
+  return api(`/calendars/${encodeURIComponent(calendarId)}/events?${params}`);
+}
+
+export async function pingCalendar() {
+  return api(`/users/me/calendarList?maxResults=5`);
+}
+
+export async function importAllEvents({ from = "2025-01-01T00:00:00Z", to = null, calendarId = DEFAULT_CALENDAR_ID, onProgress } = {}) {
+  const timeMin = from;
+  const timeMax = to || new Date(Date.now() + 5 * 365 * 864e5).toISOString();
+
+  let pageToken = null;
+  const allEvents = [];
+  let page = 0;
+
+  do {
+    const params = new URLSearchParams({
+      timeMin,
+      timeMax,
+      singleEvents: "true",
+      orderBy: "startTime",
+      maxResults: "250"
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+
+    const data = await api(`/calendars/${encodeURIComponent(calendarId)}/events?${params}`);
+    const items = (data.items || []).filter(e => e.status !== "cancelled");
+    allEvents.push(...items);
+    pageToken = data.nextPageToken || null;
+    page++;
+
+    if (onProgress) onProgress(allEvents.length, page);
+  } while (pageToken);
+
+  return allEvents;
+}
+
+export function gcalEventToTask(event) {
+  const start = event.start?.dateTime || event.start?.date;
+  const end = event.end?.dateTime || event.end?.date;
+  const isAllDay = !event.start?.dateTime;
+
+  const date = (start || "").slice(0, 10);
+  const time = isAllDay ? null : (start || "").slice(11, 16);
+  const endTime = (!isAllDay && end) ? end.slice(11, 16) : null;
+
+  const colorMap = {
+    "1": "personal", "2": "vacation", "3": "work-sye", "4": "personal", "5": "app", "6": "personal",
+    "7": "medical", "8": "event", "9": "own", "10": "personal", "11": "work-jac"
+  };
+
+  const type = event.extendedProperties?.private?.type || colorMap[String(event.colorId)] || "personal";
+
+  return {
+    type,
+    title: event.summary || "(sin título)",
+    notes: event.description || "",
+    date,
+    time,
+    endTime,
+    done: false,
+    gcalEventId: event.id,
+    gcalEventType: event.eventType || "default",
+    calendarOnly: event.eventType === "birthday",
+    gcalUpdated: event.updated,
+    allDay: isAllDay
+  };
+}
+
+const TASKS_API = "https://tasks.googleapis.com/tasks/v1";
+
+async function tasksApi(path, init = {}) {
+  if (!accessToken || Date.now() >= tokenExpiresAt - 60000) {
+    throw new Error("Token de Google no disponible.");
+  }
+  const res = await fetch(`${TASKS_API}${path}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      ...(init.headers || {})
     }
-    t.oncomplete = () => {
-      try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "drive-sync" } })); } catch (_) {}
-      resolve(count);
-    };
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error || new Error("No se pudieron aplicar los datos sincronizados."));
   });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => "");
+    throw new Error(`Google Tasks API ${res.status}: ${txt}`);
+  }
+  return res.status === 204 ? null : res.json();
 }
 
-export async function getAllSettings() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("settings").objectStore("settings").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+export async function listGoogleTasks() {
+  const all = [];
+  let pageToken = null;
+  do {
+    const params = new URLSearchParams({ maxResults: "100", showCompleted: "true", showHidden: "true", showDeleted: "true" });
+    if (pageToken) params.set("pageToken", pageToken);
+    const data = await tasksApi(`/lists/@default/tasks?${params}`);
+    all.push(...(data.items || []));
+    pageToken = data.nextPageToken || null;
+  } while (pageToken);
+  return all;
 }
 
-export async function getAllNotes() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("notes").objectStore("notes").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+export async function createGoogleTask(task) {
+  return tasksApi("/lists/@default/tasks", { method: "POST", body: JSON.stringify(task) });
 }
 
-
-
-/* ============ PAPELERA (retención de 7 días) ============ */
-const TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-export async function moveToTrash(collection, record) {
-  const allowed = ["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes"];
-  if (!allowed.includes(collection) || !record || record.id == null) throw new Error("Registro no válido para la papelera.");
-  const now = new Date().toISOString();
-  const entry = { id: uid(), collection, recordId: record.id, record, deletedAt: now, expiresAt: new Date(Date.now() + TRASH_RETENTION_MS).toISOString() };
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction([collection, "trash"], "readwrite");
-    t.objectStore("trash").put(entry);
-    t.objectStore(collection).delete(record.id);
-    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "trash" } })); } catch (_) {} resolve(entry); };
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error || new Error("No se pudo mover el registro a la papelera."));
-  });
-}
-export async function getTrash() {
-  const db = await initDB();
-  const entries = await new Promise((resolve, reject) => {
-    const req = db.transaction("trash").objectStore("trash").getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
-  const now = Date.now();
-  const valid = entries.filter(item => Date.parse(item.expiresAt || "") > now);
-  const expired = entries.filter(item => !valid.includes(item));
-  if (expired.length) await new Promise((resolve, reject) => {
-    const t = db.transaction("trash", "readwrite");
-    expired.forEach(item => t.objectStore("trash").delete(item.id));
-    t.oncomplete = resolve; t.onerror = () => reject(t.error);
-  });
-  return valid.sort((a,b) => String(b.deletedAt).localeCompare(String(a.deletedAt)));
-}
-export async function restoreTrashItem(trashId) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction(["trash", "tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes"], "readwrite");
-    const trash = t.objectStore("trash");
-    const req = trash.get(trashId);
-    let restored = false;
-    let restoredRecord = null;
-    req.onsuccess = () => {
-      const entry = req.result;
-      if (!entry || Date.parse(entry.expiresAt || "") <= Date.now()) { if (entry) trash.delete(trashId); return; }
-      if (!["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes"].includes(entry.collection)) return;
-      t.objectStore(entry.collection).put(entry.record);
-      restoredRecord = entry.collection === "tasks" ? entry.record : null;
-      trash.delete(trashId);
-      restored = true;
-    };
-    req.onerror = () => reject(req.error);
-    t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "restore" } })); if (restoredRecord) window.dispatchEvent(new CustomEvent("papelegruba:task-change", { detail: { action: "upsert", task: restoredRecord } })); } catch (_) {} resolve(restored); };
-    t.onerror = () => reject(t.error);
-  });
-}
-export async function permanentlyDeleteTrashItem(trashId) {
-  return tx("trash", "readwrite", s => s.delete(trashId));
+export async function updateGoogleTask(id, task) {
+  return tasksApi(`/lists/@default/tasks/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(task) });
 }
 
-/* ============ CONTROL DE SALUD ============ */
-export async function getAllHealthEpisodes() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("healthEpisodes").objectStore("healthEpisodes").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+export async function deleteGoogleTask(id) {
+  return tasksApi(`/lists/@default/tasks/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function createCalendarEvent(event) {
+  return api(`/calendars/${encodeURIComponent(DEFAULT_CALENDAR_ID)}/events`, { method: "POST", body: JSON.stringify(event) });
+}
+
+export async function updateCalendarEvent(id, event) {
+  return api(`/calendars/${encodeURIComponent(DEFAULT_CALENDAR_ID)}/events/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(event) });
+}
+
+export async function deleteCalendarEvent(id) {
+  return api(`/calendars/${encodeURIComponent(DEFAULT_CALENDAR_ID)}/events/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export async function getCalendarEvent(id) {
+  try {
+    return await api(`/calendars/${encodeURIComponent(DEFAULT_CALENDAR_ID)}/events/${encodeURIComponent(id)}`);
+  } catch (error) {
+    if (/Google API 404/.test(error.message || "")) return null;
+    throw error;
+  }
+}
+
+async function driveFetch(url, init = {}) {
+  if (!accessToken || Date.now() >= tokenExpiresAt - 60000) {
+    throw new Error("Conecta con Google y autoriza el acceso a Drive antes de continuar.");
+  }
+  const response = await fetch(url, {
+    ...init,
+    headers: { Authorization: `Bearer ${accessToken}`, ...(init.headers || {}) }
   });
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Google Drive ${response.status}: ${detail || response.statusText}`);
+  }
+  return response;
 }
-export async function addHealthEpisode(partial = {}) {
-  const now = new Date().toISOString();
-  const episode = { type: "Otros", title: "", startAt: now.slice(0,16), endAt: "", intensity: null, symptoms: "", triggers: "", notes: "", createdAt: now, updatedAt: now, ...(partial && typeof partial === "object" ? partial : {}) };
-  episode.id = uid();
-  await tx("healthEpisodes", "readwrite", s => s.add(episode));
-  return episode;
+
+export async function uploadBackupToDrive(payload) {
+  const latestName = "papelegruba-backup-latest.json";
+  const files = await listBackupsOnDrive();
+  const latest = files.find(file => file.name === latestName);
+  const backupPayload = { ...payload, exportedAt: new Date().toISOString() };
+  const body = JSON.stringify(backupPayload, null, 2);
+  let saved;
+  if (latest) {
+    const response = await driveFetch(`${DRIVE_UPLOAD_API}/files/${encodeURIComponent(latest.id)}?uploadType=media`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json; charset=UTF-8" },
+      body
+    });
+    saved = { ...(await response.json().catch(() => ({}))), id: latest.id, name: latestName };
+  } else {
+    const boundary = "papelegruba_backup_boundary";
+    const metadata = { name: latestName, mimeType: "application/json", description: "Última copia automática completa de Papelegruba" };
+    const multipart = [
+      `--${boundary}`, "Content-Type: application/json; charset=UTF-8", "", JSON.stringify(metadata),
+      `--${boundary}`, "Content-Type: application/json; charset=UTF-8", "", body, `--${boundary}--`, ""
+    ].join("\r\n");
+    const response = await driveFetch(`${DRIVE_UPLOAD_API}/files?uploadType=multipart&fields=id,name,createdTime,size,webViewLink`, {
+      method: "POST",
+      headers: { "Content-Type": `multipart/related; boundary=${boundary}` },
+      body: multipart
+    });
+    saved = await response.json();
+  }
+  const verifyResponse = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(saved.id)}?alt=media`);
+  let verifiedPayload;
+  try { verifiedPayload = JSON.parse(await verifyResponse.text()); } catch (_) { throw new Error("Drive respondió a la subida, pero no se pudo verificar el contenido."); }
+  if (verifiedPayload?.format !== "papelegruba-backup" || verifiedPayload?.exportedAt !== backupPayload.exportedAt) {
+    throw new Error("Drive no confirma que la última versión se haya guardado.");
+  }
+  const metadataResponse = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(saved.id)}?fields=id,name,createdTime,modifiedTime,size,mimeType,webViewLink`);
+  saved = await metadataResponse.json();
+  const oldFiles = files.filter(file => file.id !== saved.id);
+  for (const old of oldFiles) {
+    await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(old.id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trashed: true })
+    });
+  }
+  return saved;
 }
-export async function updateHealthEpisode(id, patch) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction("healthEpisodes", "readwrite");
-    const s = t.objectStore("healthEpisodes");
-    const req = s.get(id);
-    req.onsuccess = () => {
-      if (!req.result) { reject(new Error("No se encuentra el episodio")); return; }
-      const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
-      s.put(merged);
-      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "healthEpisodes" } })); } catch (_) {} resolve(merged); };
-    };
-    req.onerror = () => reject(req.error);
-    t.onerror = () => reject(t.error);
-  });
+
+export async function listBackupsOnDrive() {
+  const q = "name contains 'papelegruba-backup-' and trashed = false";
+  const params = new URLSearchParams({ q, orderBy: "modifiedTime desc", pageSize: "100", fields: "files(id,name,createdTime,modifiedTime,size,mimeType,webViewLink)" });
+  const response = await driveFetch(`${DRIVE_API}/files?${params}`);
+  const data = await response.json();
+  return (data.files || []).filter(file => file.mimeType === "application/json");
 }
-export async function deleteHealthEpisode(id) {
-  const allEpisodes = await getAllHealthEpisodes();
-  const episode = allEpisodes.find(item => item.id === id);
-  if (episode) await moveToTrash("healthEpisodes", episode);
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction(["healthEpisodes", "medicationIntakes"], "readwrite");
-    const episodes = t.objectStore("healthEpisodes");
-    const intakes = t.objectStore("medicationIntakes");
-    const req = intakes.getAll();
-    req.onsuccess = () => {
-      req.result.filter(x => x.episodeId === id).forEach(x => intakes.put({ ...x, episodeId: null, updatedAt: new Date().toISOString() }));
-      if (!episode) episodes.delete(id);
-    };
-    req.onerror = () => { try { t.abort(); } catch {} reject(req.error); };
-    t.oncomplete = () => resolve();
-    t.onerror = () => reject(t.error);
-    t.onabort = () => reject(t.error || new Error("No se pudo eliminar el episodio"));
-  });
-}
-export async function getAllMedicationIntakes() {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const req = db.transaction("medicationIntakes").objectStore("medicationIntakes").getAll();
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-export async function addMedicationIntake(partial = {}) {
-  const now = new Date().toISOString();
-  const intake = { medication: "", dose: "", takenAt: now.slice(0,16), episodeId: null, effect: "", notes: "", createdAt: now, updatedAt: now, ...(partial && typeof partial === "object" ? partial : {}) };
-  intake.id = uid();
-  await tx("medicationIntakes", "readwrite", s => s.add(intake));
-  return intake;
-}
-export async function updateMedicationIntake(id, patch) {
-  const db = await initDB();
-  return new Promise((resolve, reject) => {
-    const t = db.transaction("medicationIntakes", "readwrite");
-    const s = t.objectStore("medicationIntakes");
-    const req = s.get(id);
-    req.onsuccess = () => {
-      if (!req.result) { reject(new Error("No se encuentra la toma")); return; }
-      const merged = { ...req.result, ...patch, updatedAt: new Date().toISOString() };
-      s.put(merged);
-      t.oncomplete = () => { try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "medicationIntakes" } })); } catch (_) {} resolve(merged); };
-    };
-    req.onerror = () => reject(req.error);
-    t.onerror = () => reject(t.error);
-  });
-}
-export async function deleteMedicationIntake(id) {
-  const all = await getAllMedicationIntakes();
-  const item = all.find(x => x.id === id);
-  if (item) await moveToTrash("medicationIntakes", item);
+
+export async function downloadBackupFromDrive(fileId) {
+  if (!fileId) throw new Error("Selecciona una copia de seguridad.");
+  const response = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?alt=media`);
+  return response.text();
 }
