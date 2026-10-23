@@ -78,24 +78,45 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toStr
 export async function addTask(partial) {
   const now = new Date().toISOString();
 
-  // Ignoramos cualquier id que venga en el partial; siempre generamos uno nuevo
+  // Ignoramos cualquier id que venga en el partial
   const { id: _ignoredId, ...safePartial } = partial || {};
 
-  // --- COMPROBADOR DE DUPLICADOS ---
+  // --- COMPROBADOR INTELIGENTE DE DUPLICADOS ---
   if (safePartial.title && safePartial.date) {
     const tareasExistentes = await getTasksByDate(safePartial.date);
-    const tituloLimpio = safePartial.title.trim().toLowerCase();
     
-    const esDuplicada = tareasExistentes.some(t => 
+    const tituloLimpio = safePartial.title.trim().toLowerCase();
+    const notasLimpias = (safePartial.notes || "").trim().toLowerCase();
+    const hora = safePartial.time || "";
+
+    // Buscamos tareas que tengan el mismo título en la misma fecha
+    const coincidencias = tareasExistentes.filter(t => 
       (t.title || "").trim().toLowerCase() === tituloLimpio
     );
 
-    if (esDuplicada) {
-      console.log("Tarea duplicada detectada y bloqueada:", safePartial.title);
-      return null; // Abortamos la creación porque ya existe
+    if (coincidencias.length > 0) {
+      // 1. Comprobar si es un clon exacto (Mismo título, misma hora y mismas notas)
+      const esClonExacto = coincidencias.some(t => 
+        (t.time || "") === hora && 
+        (t.notes || "").trim().toLowerCase() === notasLimpias
+      );
+
+      if (esClonExacto) {
+        console.warn("Bloqueado: Es un clon exacto de una tarea existente.");
+        return null; // Se ignora en silencio
+      }
+
+      // 2. Si coincide el título y la fecha, pero la hora o las notas son distintas:
+      // Le preguntamos al usuario.
+      const confirmar = confirm(`Ya existe una tarea llamada "${safePartial.title}" para el día ${safePartial.date}.\n\n¿Quieres crearla de todos modos? (Si aceptas, se creará otra tarea diferente).`);
+      
+      if (!confirmar) {
+        console.log("Creación cancelada por el usuario.");
+        return null; // El usuario le dio a Cancelar
+      }
     }
   }
-  // ---------------------------------
+  // ---------------------------------------------
 
   const task = {
     id: uid(),
