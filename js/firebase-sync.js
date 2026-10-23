@@ -1,6 +1,6 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
 import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
-import { updateTask, deleteTaskLocalOnly, getAllTasks } from "./db.js";
+import { updateTask, deleteTaskLocalOnly, getAllTasks, addTask } from "./db.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAfwZwOB90JNgQ1hewbTGwVsyrDK-GYvPg",
@@ -17,7 +17,6 @@ const tareasCol = collection(db, "tareas");
 
 let isSyncingFromCloud = false;
 
-// 1. ESCUCHAR CAMBIOS DESDE LA NUBE (Instantáneo)
 onSnapshot(tareasCol, (snapshot) => {
   isSyncingFromCloud = true;
   snapshot.docChanges().forEach(async (change) => {
@@ -26,19 +25,11 @@ onSnapshot(tareasCol, (snapshot) => {
 
     if (change.type === "added" || change.type === "modified") {
       try {
-        // Mapeamos los campos de Firebase a los de tu IndexedDB
-        const localData = {
-          title: data.titulo || "(sin título)",
-          date: data.fecha || "",
-          time: data.hora || "",
-          notes: data.notas || "",
-          type: data.tipo || "personal",
-          gcalEventId: data.gcalEventId || null
-        };
-        await updateTask(id, localData);
+        await updateTask(id, {
+          title: data.titulo || "(sin título)", date: data.fecha || "", time: data.hora || "",
+          notes: data.notas || "", type: data.tipo || "personal", gcalEventId: data.gcalEventId || null
+        });
       } catch (e) {
-        // Si la tarea es nueva y no existe en local, la creamos
-        const { addTask } = await import("./db.js");
         await addTask({ id: id, ...data });
       }
     }
@@ -49,22 +40,15 @@ onSnapshot(tareasCol, (snapshot) => {
   isSyncingFromCloud = false;
 });
 
-// 2. ESCUCHAR CAMBIOS LOCALES Y ENVIARLOS A FIREBASE
 window.addEventListener("papelegruba:task-change", async (e) => {
-  if (isSyncingFromCloud) return; // Evitar bucles
-  
+  if (isSyncingFromCloud) return;
   const { action, task } = e.detail;
   if (!task) return;
   
   if (action === "upsert") {
     await setDoc(doc(db, "tareas", task.id), {
-      titulo: task.title,
-      fecha: task.date,
-      hora: task.time,
-      notas: task.notes,
-      tipo: task.type,
-      gcalEventId: task.gcalEventId || null,
-      updatedAt: new Date().toISOString()
+      titulo: task.title, fecha: task.date, hora: task.time, notas: task.notes, tipo: task.type,
+      gcalEventId: task.gcalEventId || null, updatedAt: new Date().toISOString()
     }, { merge: true });
   } 
   else if (action === "delete") {
@@ -72,7 +56,6 @@ window.addEventListener("papelegruba:task-change", async (e) => {
   }
 });
 
-// 3. AL ARRANCAR, SUBIR LO QUE YA TENGAS EN LOCAL (Solo la primera vez)
 export async function subirTareasLocalesIniciales() {
   const tareasLocales = await getAllTasks();
   if (tareasLocales.length === 0) return;
@@ -82,13 +65,8 @@ export async function subirTareasLocalesIniciales() {
     console.log("Subiendo tareas locales a Firebase por primera vez...");
     for (const t of tareasLocales) {
       await setDoc(doc(db, "tareas", t.id), {
-        titulo: t.title,
-        fecha: t.date,
-        hora: t.time,
-        notas: t.notes,
-        tipo: t.type,
-        gcalEventId: t.gcalEventId || null,
-        updatedAt: new Date().toISOString()
+        titulo: t.title, fecha: t.date, hora: t.time, notas: t.notes, tipo: t.type,
+        gcalEventId: t.gcalEventId || null, updatedAt: new Date().toISOString()
       });
     }
     console.log("¡Subida completada!");
