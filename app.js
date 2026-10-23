@@ -11,14 +11,12 @@ import { renderSettings } from "./js/views/settings.js";
 import { renderMedical } from "./js/views/medical.js";
 import { renderHealth } from "./js/views/health.js";
 import { getActiveTimer, getElapsedMs, formatElapsed, onChange } from "./js/hours.js";
-import { installAutoBackup } from "./js/auto-backup.js";
 
-// DESACTIVAMOS LOS SINCRONIZADORES ANTIGUOS PARA QUE NO DUPLIQUEN
-// import { trySyncOnOpen, installGoogleSyncListeners } from "./js/google-sync.js";
-// import { installDriveSyncListeners } from "./js/drive-sync.js";
-
-// IMPORTAMOS FIREBASE
+// IMPORTAMOS FIREBASE (El nuevo sistema de sincronización instantánea)
 import { subirTareasLocalesIniciales } from "./js/firebase-sync.js";
+
+// NOTA: Hemos quitado las importaciones de google-sync.js, drive-sync.js y auto-backup.js
+// para que no te pida la cuenta de Google al abrir ni duplique tareas.
 
 const views = {
   year: renderYear,
@@ -105,15 +103,7 @@ onChange(updateFloatingBadge);
     } catch (e) {
       console.error("Error al iniciar Firebase:", e);
     }
-
-    // DEJAMOS EL BACKUP AUTOMÁTICO POR SI QUIERES TENER UNA COPIA EN DRIVE
-    installAutoBackup(); 
     
-    // LOS SINCRONIZADORES ANTIGUOS ESTÁN DESACTIVADOS
-    // installGoogleSyncListeners();
-    // installDriveSyncListeners();
-    // trySyncOnOpen().catch(...)
-
     await navigate("day");
     
     if ("serviceWorker" in navigator) {
