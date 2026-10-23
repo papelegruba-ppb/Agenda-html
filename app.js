@@ -11,14 +11,14 @@ import { renderSettings } from "./js/views/settings.js";
 import { renderMedical } from "./js/views/medical.js";
 import { renderHealth } from "./js/views/health.js";
 import { getActiveTimer, getElapsedMs, formatElapsed, onChange } from "./js/hours.js";
-import { trySyncOnOpen, installGoogleSyncListeners } from "./js/google-sync.js";
-import { installDriveSyncListeners } from "./js/drive-sync.js";
 import { installAutoBackup } from "./js/auto-backup.js";
 
-// ==========================================
-// NUEVO: Importamos el archivo de Firebase
+// DESACTIVAMOS LOS SINCRONIZADORES ANTIGUOS PARA QUE NO DUPLIQUEN
+// import { trySyncOnOpen, installGoogleSyncListeners } from "./js/google-sync.js";
+// import { installDriveSyncListeners } from "./js/drive-sync.js";
+
+// IMPORTAMOS FIREBASE
 import { subirTareasLocalesIniciales } from "./js/firebase-sync.js";
-// ==========================================
 
 const views = {
   year: renderYear,
@@ -95,25 +95,27 @@ function updateFloatingBadge() {
 onChange(updateFloatingBadge);
 
 /* ============ Arranque ============ */
-// Aquí es donde tú decías que no lo encontrabas. Es esta función auto-ejecutable.
 (async () => {
   try {
     await initDB();
     
-    // ==========================================
-    // NUEVO: Arrancamos Firebase y subimos lo que tengas en local
+    // ARRANCAMOS FIREBASE Y SUBIMOS LAS TAREAS LOCALES
     try {
       await subirTareasLocalesIniciales();
     } catch (e) {
       console.error("Error al iniciar Firebase:", e);
     }
-    // ==========================================
 
-    installGoogleSyncListeners();
-    installDriveSyncListeners();
-    installAutoBackup();
+    // DEJAMOS EL BACKUP AUTOMÁTICO POR SI QUIERES TENER UNA COPIA EN DRIVE
+    installAutoBackup(); 
+    
+    // LOS SINCRONIZADORES ANTIGUOS ESTÁN DESACTIVADOS
+    // installGoogleSyncListeners();
+    // installDriveSyncListeners();
+    // trySyncOnOpen().catch(...)
+
     await navigate("day");
-    trySyncOnOpen().catch(error => console.info("Sincronización al abrir pendiente:", error?.message || error));
+    
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("sw.js").catch(() => {});
     }
