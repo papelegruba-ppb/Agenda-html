@@ -88,6 +88,23 @@ async function applyRemoteDocument(docSnapshot) {
   const remote = normalizeCloudTask(docSnapshot.id, docSnapshot.data());
   const local = await readLocalTask(remote.id);
   if (!local) {
+    // Los IDs de las versiones antiguas no siempre coinciden. Antes de importar,
+    // busca una tarea equivalente por título + fecha + notas para no crear clones.
+    const allLocal = await getAllTasks();
+    const equivalent = allLocal.find(item => taskFingerprint(item) === taskFingerprint(remote));
+    if (equivalent) {
+      if (stamp(remote.updatedAt) > stamp(equivalent.updatedAt)) {
+        // Conserva el ID local y sus campos adicionales; solo actualiza la versión equivalente.
+        await writeLocalFromCloud({ ...remote, id: equivalent.id });
+      }
+      // Migra el documento remoto al ID local estable antes de retirar el ID antiguo.
+      const canonical = await readLocalTask(equivalent.id);
+      if (canonical) await uploadTask(canonical);
+      if (String(remote.id) !== String(equivalent.id)) {
+        await deleteDoc(doc(cloudDb, "tareas", String(remote.id)));
+      }
+      return;
+    }
     await writeLocalFromCloud(remote);
     return;
   }
