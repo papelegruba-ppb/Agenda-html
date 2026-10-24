@@ -29,6 +29,17 @@ const stamp = value => {
   return Number.isFinite(n) ? n : 0;
 };
 
+function taskFingerprint(task) {
+  const normalize = value => String(value || "").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("es")
+    .replace(/\s+/g, " ");
+  return JSON.stringify([
+    normalize(task?.title),
+    String(task?.date || "").slice(0, 10),
+    normalize(task?.notes)
+  ]);
+}
+
 function normalizeCloudTask(id, raw) {
   // Formato nuevo: documento completo dentro de "task".
   if (raw?.task && typeof raw.task === "object") {
