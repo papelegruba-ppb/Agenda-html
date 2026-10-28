@@ -574,7 +574,7 @@ export async function subirTareasLocalesIniciales() {
     }
 
     ready = true;
-    setSyncStatus("connected", "Firebase conectado · sincronización de toda la agenda activa");
+    setSyncStatus("connected", "Sesión: " + signedInUser.email + " · sincronización de la agenda activa");
     if (queuedSnapshot) {
       const latest = queuedSnapshot;
       queuedSnapshot = null;
