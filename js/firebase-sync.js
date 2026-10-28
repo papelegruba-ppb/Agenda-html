@@ -429,7 +429,7 @@ async function syncTrashTombstones() {
     if (key == null) continue;
     const deletedAt = entry.deletedAt || nowIso();
     if (storeName === "tasks") {
-      await deleteDoc(doc(cloudDb, "tareas", String(key)));
+      await deleteDoc(userDoc("tareas", key));
     } else {
       await setDoc(userDoc("sync_" + storeName, cloudKey(key)), {
         key: String(key), deleted: true, updatedAt: deletedAt, schemaVersion: 1
