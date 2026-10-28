@@ -211,12 +211,221 @@ window.addEventListener("papelegruba:task-change", event => {
   }).catch(error => { console.error("No se pudo sincronizar el cambio con Firebase:", error); setSyncStatus("error", "No se pudo guardar en la nube: " + (error?.message || error)); });
 });
 
+
+// Sincronización adicional de todos los almacenes locales de IndexedDB.
+// Las tareas mantienen compatibilidad con la colección histórica "tareas".
+const OTHER_STORES = ["projects", "notes", "habits", "healthEpisodes", "medicationIntakes", "trash", "sessions", "payments", "settings"];
+const otherCols = Object.fromEntries(OTHER_STORES.map(name => [name, collection(cloudDb, "sync_" + name)]));
+const otherQueuedSnapshots = Object.create(null);
+let otherReady = false;
+let otherSyncQueue = Promise.resolve();
+
+function recordKey(storeName, record) {
+  const key = storeName === "settings" ? record?.key : record?.id;
+  return key == null || key === "" ? null : String(key);
+}
+function cloudKey(key) { return encodeURIComponent(String(key)); }
+function stableJSON(value) {
+  if (Array.isArray(value)) return "[" + value.map(stableJSON).join(",") + "]";
+  if (value && typeof value === "object") {
+    return "{" + Object.keys(value).sort().map(k => JSON.stringify(k) + ":" + stableJSON(value[k])).join(",") + "}";
+  }
+  return JSON.stringify(value);
+}
+async function readStore(storeName) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const req = db.transaction(storeName, "readonly").objectStore(storeName).getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function putStoreRecord(storeName, record) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).put(record);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("No se pudo guardar " + storeName));
+  });
+}
+async function deleteStoreRecord(storeName, key) {
+  const db = await initDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    tx.objectStore(storeName).delete(storeName === "settings" ? key : key);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+    tx.onabort = () => reject(tx.error || new Error("No se pudo borrar " + storeName));
+  });
+}
+async function uploadStoreRecord(storeName, record, forcedUpdatedAt = null) {
+  const key = recordKey(storeName, record);
+  if (key == null) return;
+  const updatedAt = forcedUpdatedAt || record.updatedAt || record.createdAt || nowIso();
+  const normalized = { ...record };
+  if (!normalized.updatedAt) normalized.updatedAt = updatedAt;
+  await setDoc(doc(cloudDb, "sync_" + storeName, cloudKey(key)), {
+    key,
+    record: normalized,
+    updatedAt,
+    deleted: false,
+    schemaVersion: 1
+  });
+  // Normaliza la marca temporal local para que futuras modificaciones se puedan comparar.
+  if (!record.updatedAt && storeName !== "settings") await putStoreRecord(storeName, normalized);
+}
+async function applyStoreSnapshot(storeName, snapshot) {
+  const localRecords = await readStore(storeName);
+  const localByKey = new Map(localRecords.map(record => [recordKey(storeName, record), record]).filter(([key]) => key != null));
+  for (const change of snapshot.docChanges()) {
+    const data = change.doc.data() || {};
+    const key = String(data.key ?? decodeURIComponent(change.doc.id));
+    if (change.type === "removed") {
+      // Solo se propagan eliminaciones explícitas (tombstones), nunca se infiere un borrado
+      // por la desaparición de un documento durante una carga inicial.
+      if (data.deleted) await deleteStoreRecord(storeName, key);
+      continue;
+    }
+    const local = localByKey.get(key);
+    if (data.deleted === true) {
+      if (local && stamp(local.updatedAt) > stamp(data.updatedAt)) {
+        await uploadStoreRecord(storeName, local);
+      } else if (local) {
+        await deleteStoreRecord(storeName, key);
+      }
+      continue;
+    }
+    const remote = data.record;
+    if (!remote || typeof remote !== "object") continue;
+    if (!local) {
+      await putStoreRecord(storeName, remote);
+      continue;
+    }
+    if (stableJSON(local) === stableJSON(remote)) continue;
+    const localTime = stamp(local.updatedAt || local.createdAt);
+    const remoteTime = stamp(data.updatedAt || remote.updatedAt || remote.createdAt);
+    if (localTime >= remoteTime) {
+      await uploadStoreRecord(storeName, local, nowIso());
+    } else {
+      const normalized = { ...remote, updatedAt: remote.updatedAt || data.updatedAt || nowIso() };
+      await putStoreRecord(storeName, normalized);
+    }
+  }
+  try {
+    window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: storeName, remote: true } }));
+  } catch (_) {}
+}
+async function syncStore(storeName) {
+  const [localRecords, cloudSnapshot] = await Promise.all([readStore(storeName), getDocs(otherCols[storeName])]);
+  const cloudByKey = new Map(cloudSnapshot.docs.map(item => [String(item.data()?.key ?? decodeURIComponent(item.id)), item]));
+  const localKeys = new Set();
+  for (const local of localRecords) {
+    const key = recordKey(storeName, local);
+    if (key == null) continue;
+    localKeys.add(key);
+    const remoteDoc = cloudByKey.get(key);
+    if (!remoteDoc) {
+      await uploadStoreRecord(storeName, local);
+      continue;
+    }
+    const remoteData = remoteDoc.data() || {};
+    if (remoteData.deleted === true) {
+      if (stamp(local.updatedAt || local.createdAt) > stamp(remoteData.updatedAt)) {
+        await uploadStoreRecord(storeName, local, nowIso());
+      } else {
+        await deleteStoreRecord(storeName, key);
+      }
+      continue;
+    }
+    const remote = remoteData.record;
+    if (!remote || stableJSON(local) === stableJSON(remote)) continue;
+    const localTime = stamp(local.updatedAt || local.createdAt);
+    const remoteTime = stamp(remoteData.updatedAt || remote.updatedAt || remote.createdAt);
+    if (localTime >= remoteTime) await uploadStoreRecord(storeName, local, nowIso());
+    else await putStoreRecord(storeName, { ...remote, updatedAt: remote.updatedAt || remoteData.updatedAt || nowIso() });
+  }
+  // Solo se importan registros remotos que no existen localmente; no se borran datos
+  // locales por el hecho de que una colección remota esté vacía.
+  for (const remoteDoc of cloudSnapshot.docs) {
+    const data = remoteDoc.data() || {};
+    const key = String(data.key ?? decodeURIComponent(remoteDoc.id));
+    if (localKeys.has(key)) continue;
+    if (data.deleted === true) continue;
+    if (data.record && typeof data.record === "object") await putStoreRecord(storeName, data.record);
+  }
+}
+async function syncTrashTombstones() {
+  const entries = await readStore("trash");
+  for (const entry of entries) {
+    const storeName = entry?.collection;
+    const key = entry?.recordId;
+    if (!OTHER_STORES.includes(storeName) && storeName !== "tasks") continue;
+    if (key == null) continue;
+    const deletedAt = entry.deletedAt || nowIso();
+    if (storeName === "tasks") {
+      await deleteDoc(doc(cloudDb, "tareas", String(key)));
+    } else {
+      await setDoc(doc(cloudDb, "sync_" + storeName, cloudKey(key)), {
+        key: String(key), deleted: true, updatedAt: deletedAt, schemaVersion: 1
+      });
+    }
+  }
+}
+for (const storeName of OTHER_STORES) {
+  onSnapshot(otherCols[storeName], snapshot => {
+    if (!otherReady) {
+      otherQueuedSnapshots[storeName] = snapshot;
+      return;
+    }
+    otherSyncQueue = otherSyncQueue
+      .then(() => applyStoreSnapshot(storeName, snapshot))
+      .catch(error => {
+        console.error("Error de sincronización en " + storeName + ":", error);
+        setSyncStatus("error", "Firebase (" + storeName + "): " + (error?.message || error));
+      });
+  }, error => {
+    console.error("Error de escucha Firebase en " + storeName + ":", error);
+    setSyncStatus("error", "Firebase (" + storeName + "): " + (error?.message || error));
+  });
+}
+window.addEventListener("papelegruba:data-change", event => {
+  if (applyingRemote || !otherReady) return;
+  const collectionName = String(event.detail?.collection || "");
+  const requested = collectionName === "restore" || collectionName === "drive-sync"
+    ? OTHER_STORES.slice()
+    : collectionName.split(",").filter(name => OTHER_STORES.includes(name));
+  if (collectionName === "trash" && !requested.includes("trash")) requested.push("trash");
+  if (!requested.length) return;
+  otherSyncQueue = otherSyncQueue.then(async () => {
+    for (const storeName of requested) await syncStore(storeName);
+    if (requested.includes("trash")) await syncTrashTombstones();
+  }).catch(error => {
+    console.error("No se pudo sincronizar todos los datos:", error);
+    setSyncStatus("error", "No se pudieron sincronizar todos los datos: " + (error?.message || error));
+  });
+});
+async function initializeOtherStores() {
+  for (const storeName of OTHER_STORES) await syncStore(storeName);
+  otherReady = true;
+  for (const storeName of OTHER_STORES) {
+    if (otherQueuedSnapshots[storeName]) {
+      const snapshot = otherQueuedSnapshots[storeName];
+      delete otherQueuedSnapshots[storeName];
+      await applyStoreSnapshot(storeName, snapshot);
+    }
+  }
+  await syncTrashTombstones();
+}
+
 export async function subirTareasLocalesIniciales() {
   if (initializing || ready) return;
   initializing = true;
   setSyncStatus("connecting", "Papelegruba · comprobando conexión con Firebase…");
   try {
     await initDB();
+    await initializeOtherStores();
     const [localTasks, cloudSnapshot] = await Promise.all([getAllTasks(), getDocs(tareasCol)]);
     const cloudById = new Map(cloudSnapshot.docs.map(item => [item.id, item]));
     const localById = new Map(localTasks.filter(task => task?.id).map(task => [String(task.id), task]));
@@ -242,7 +451,7 @@ export async function subirTareasLocalesIniciales() {
     }
 
     ready = true;
-    setSyncStatus("connected", "Firebase conectado · sincronización de tareas activa");
+    setSyncStatus("connected", "Firebase conectado · sincronización de toda la agenda activa");
     if (queuedSnapshot) {
       const latest = queuedSnapshot;
       queuedSnapshot = null;
