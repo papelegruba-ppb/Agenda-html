@@ -16,7 +16,7 @@ export async function renderSettings(root) {
         <h3>Copia de seguridad local</h3>
         <p class="hint">
           Descarga un archivo JSON con todos tus datos (tareas, hábitos, proyectos, notas, salud, papelera...).
-          <strong>Nota:</strong> La sincronización entre dispositivos ahora es automática e instantánea gracias a Firebase, por lo que ya no necesitas conectar Google Drive.
+          <strong>Importante:</strong> la versión actual de Firebase solo sincroniza las tareas. El estado de conexión aparece en el indicador inferior; los demás apartados siguen guardados localmente en cada dispositivo.
         </p>
         <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
         
