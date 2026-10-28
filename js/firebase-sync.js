@@ -289,6 +289,11 @@ function recordKey(storeName, record) {
   const key = storeName === "settings" ? record?.key : record?.id;
   return key == null || key === "" ? null : String(key);
 }
+// driveSyncBase is an obsolete, very large local Google Drive comparison snapshot.
+// Drive sync is currently disabled, so this data must remain local and never be a Firestore document.
+function isLocalOnlySetting(storeName, key) {
+  return storeName === "settings" && String(key || "").startsWith("driveSyncBase:");
+}
 function cloudKey(key) { return encodeURIComponent(String(key)); }
 function stableJSON(value) {
   if (Array.isArray(value)) return "[" + value.map(stableJSON).join(",") + "]";
@@ -341,11 +346,12 @@ async function uploadStoreRecord(storeName, record, forcedUpdatedAt = null) {
   if (record.updatedAt !== updatedAt) await putStoreRecord(storeName, normalized);
 }
 async function applyStoreSnapshot(storeName, snapshot) {
-  const localRecords = await readStore(storeName);
+  const localRecords = (await readStore(storeName)).filter(record => !isLocalOnlySetting(storeName, recordKey(storeName, record)));
   const localByKey = new Map(localRecords.map(record => [recordKey(storeName, record), record]).filter(([key]) => key != null));
   for (const change of snapshot.docChanges()) {
     const data = change.doc.data() || {};
     const key = String(data.key ?? decodeURIComponent(change.doc.id));
+    if (isLocalOnlySetting(storeName, key)) continue;
     if (change.type === "removed") {
       // Solo se propagan eliminaciones explícitas (tombstones), nunca se infiere un borrado
       // por la desaparición de un documento durante una carga inicial.
@@ -382,8 +388,11 @@ async function applyStoreSnapshot(storeName, snapshot) {
   } catch (_) {}
 }
 async function syncStore(storeName) {
-  const [localRecords, cloudSnapshot] = await Promise.all([readStore(storeName), getDocs(otherCols[storeName])]);
-  const cloudByKey = new Map(cloudSnapshot.docs.map(item => [String(item.data()?.key ?? decodeURIComponent(item.id)), item]));
+  const [allLocalRecords, cloudSnapshot] = await Promise.all([readStore(storeName), getDocs(otherCols[storeName])]);
+  const localRecords = allLocalRecords.filter(record => !isLocalOnlySetting(storeName, recordKey(storeName, record)));
+  const cloudByKey = new Map(cloudSnapshot.docs
+    .filter(item => !isLocalOnlySetting(storeName, item.data()?.key ?? decodeURIComponent(item.id)))
+    .map(item => [String(item.data()?.key ?? decodeURIComponent(item.id)), item]));
   const localKeys = new Set();
   for (const local of localRecords) {
     const key = recordKey(storeName, local);
