@@ -406,8 +406,67 @@ window.addEventListener("papelegruba:data-change", event => {
     setSyncStatus("error", "No se pudieron sincronizar todos los datos: " + (error?.message || error));
   });
 });
+
+// El cronómetro vive en localStorage, no en IndexedDB; se sincroniza por separado.
+const timerDoc = doc(cloudDb, "sync_activeTimer", "current");
+let timerSyncReady = false;
+let timerQueuedSnapshot = null;
+async function syncTimerFromCloud(snapshot) {
+  const remote = snapshot?.exists() ? snapshot.data() : null;
+  const localRaw = localStorage.getItem("papelegruba-timer-active");
+  let local = null;
+  try { local = localRaw ? JSON.parse(localRaw) : null; } catch (_) {}
+  if (!remote) {
+    if (local && timerSyncReady) await setDoc(timerDoc, { record: local, updatedAt: local.startedAt || nowIso(), deleted: false });
+    return;
+  }
+  if (remote.deleted) {
+    if (!local || stamp(local.startedAt) <= stamp(remote.updatedAt)) localStorage.removeItem("papelegruba-timer-active");
+    return;
+  }
+  if (!remote.record) return;
+  if (!local || stamp(remote.updatedAt || remote.record.startedAt) > stamp(local.startedAt)) {
+    localStorage.setItem("papelegruba-timer-active", JSON.stringify(remote.record));
+    window.dispatchEvent(new CustomEvent("papelegruba:timer-sync"));
+  } else if (local && stamp(local.startedAt) > stamp(remote.updatedAt || remote.record.startedAt)) {
+    await setDoc(timerDoc, { record: local, updatedAt: local.startedAt || nowIso(), deleted: false });
+  }
+}
+onSnapshot(timerDoc, snapshot => {
+  if (!timerSyncReady) { timerQueuedSnapshot = snapshot; return; }
+  syncTimerFromCloud(snapshot).catch(error => {
+    console.error("Error al sincronizar el cronómetro:", error);
+    setSyncStatus("error", "Firebase (cronómetro): " + (error?.message || error));
+  });
+}, error => {
+  console.error("Error de escucha del cronómetro:", error);
+  setSyncStatus("error", "Firebase (cronómetro): " + (error?.message || error));
+});
+window.addEventListener("papelegruba:data-change", event => {
+  if (event.detail?.collection !== "activeTimer" || !otherReady) return;
+  const localRaw = localStorage.getItem("papelegruba-timer-active");
+  let record = null;
+  try { record = localRaw ? JSON.parse(localRaw) : null; } catch (_) {}
+  setDoc(timerDoc, { record, updatedAt: nowIso(), deleted: !record })
+    .catch(error => {
+      console.error("No se pudo sincronizar el cronómetro:", error);
+      setSyncStatus("error", "Firebase (cronómetro): " + (error?.message || error));
+    });
+});
+
 async function initializeOtherStores() {
   for (const storeName of OTHER_STORES) await syncStore(storeName);
+  const timerSnapshot = await getDocs(collection(cloudDb, "sync_activeTimer"));
+  const currentTimer = timerSnapshot.docs.find(item => item.id === "current");
+  if (currentTimer) await syncTimerFromCloud({ exists: () => true, data: () => currentTimer.data() });
+  else {
+    const localTimerRaw = localStorage.getItem("papelegruba-timer-active");
+    if (localTimerRaw) {
+      try { const localTimer = JSON.parse(localTimerRaw); if (localTimer) await setDoc(timerDoc, { record: localTimer, updatedAt: localTimer.startedAt || nowIso(), deleted: false }); } catch (_) {}
+    }
+  }
+  timerSyncReady = true;
+  if (timerQueuedSnapshot) { const snapshot = timerQueuedSnapshot; timerQueuedSnapshot = null; await syncTimerFromCloud(snapshot); }
   otherReady = true;
   for (const storeName of OTHER_STORES) {
     if (otherQueuedSnapshots[storeName]) {
