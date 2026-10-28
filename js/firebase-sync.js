@@ -424,6 +424,7 @@ async function syncStore(storeName) {
   for (const remoteDoc of cloudSnapshot.docs) {
     const data = remoteDoc.data() || {};
     const key = String(data.key ?? decodeURIComponent(remoteDoc.id));
+    if (isLocalOnlySetting(storeName, key)) continue;
     if (localKeys.has(key)) continue;
     if (data.deleted === true) continue;
     if (data.record && typeof data.record === "object") await putStoreRecord(storeName, data.record);
@@ -556,8 +557,11 @@ async function migrateLegacyCloudData() {
     let batch = writeBatch(cloudDb);
     let writes = 0;
     for (const oldDoc of legacySnapshot.docs) {
+      const oldData = oldDoc.data() || {};
+      const oldKey = String(oldData.key ?? (() => { try { return decodeURIComponent(oldDoc.id); } catch (_) { return oldDoc.id; } })());
+      if (storeName === "sync_settings" && isLocalOnlySetting("settings", oldKey)) continue;
       if (existingIds.has(oldDoc.id)) continue;
-      batch.set(userDoc(storeName, oldDoc.id), oldDoc.data());
+      batch.set(userDoc(storeName, oldDoc.id), oldData);
       writes++;
       if (writes === 450) {
         await batch.commit();
