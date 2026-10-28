@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import {
-  getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs
+  getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs, getDoc
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 import { initDB, getAllTasks } from "./db.js";
 
@@ -518,6 +518,30 @@ window.addEventListener("papelegruba:data-change", event => {
     });
 });
 
+// Copia sin borrar los datos de las colecciones antiguas globales a la ruta privada
+// de esta cuenta. Solo importa documentos cuyo ID aún no exista en la ruta nueva.
+async function migrateLegacyCloudData() {
+  const legacyStores = ["tareas", ...OTHER_STORES.map(name => "sync_" + name), "sync_activeTimer"];
+  for (const storeName of legacyStores) {
+    let legacySnapshot;
+    try {
+      legacySnapshot = await getDocs(collection(cloudDb, storeName));
+    } catch (error) {
+      console.warn("No se pudo leer la colección antigua " + storeName + "; se conserva intacta:", error?.message || error);
+      continue;
+    }
+    for (const oldDoc of legacySnapshot.docs) {
+      const target = userDoc(storeName, oldDoc.id);
+      try {
+        const existing = await getDoc(target);
+        if (!existing.exists()) await setDoc(target, oldDoc.data());
+      } catch (error) {
+        console.warn("No se pudo migrar " + storeName + "/" + oldDoc.id + ":", error?.message || error);
+      }
+    }
+  }
+}
+
 async function initializeOtherStores() {
   for (const storeName of OTHER_STORES) await syncStore(storeName);
   const timerSnapshot = await getDocs(userCollection("sync_activeTimer"));
@@ -548,6 +572,7 @@ export async function subirTareasLocalesIniciales() {
   setSyncStatus("connecting", "Papelegruba · comprobando conexión con Firebase…");
   try {
     await initDB();
+    await migrateLegacyCloudData();
     await initializeOtherStores();
     const [localTasks, cloudSnapshot] = await Promise.all([getAllTasks(), getDocs(tareasCol)]);
     const cloudById = new Map(cloudSnapshot.docs.map(item => [item.id, item]));
