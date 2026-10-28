@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import {
-  getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs, getDoc
+  getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs, getDoc, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 import { initDB, getAllTasks } from "./db.js";
 
@@ -518,8 +518,9 @@ window.addEventListener("papelegruba:data-change", event => {
     });
 });
 
-// Copia sin borrar los datos de las colecciones antiguas globales a la ruta privada
-// de esta cuenta. Solo importa documentos cuyo ID aún no exista en la ruta nueva.
+// Copia sin borrar datos de las colecciones antiguas globales a la ruta privada
+// de esta cuenta. Lee cada colección de destino una sola vez y escribe por lotes
+// para evitar miles de solicitudes secuenciales durante el arranque.
 async function migrateLegacyCloudData() {
   const legacyStores = ["tareas", ...OTHER_STORES.map(name => "sync_" + name), "sync_activeTimer"];
   for (const storeName of legacyStores) {
@@ -530,15 +531,32 @@ async function migrateLegacyCloudData() {
       console.warn("No se pudo leer la colección antigua " + storeName + "; se conserva intacta:", error?.message || error);
       continue;
     }
+    if (legacySnapshot.empty) continue;
+
+    let targetSnapshot;
+    try {
+      targetSnapshot = await getDocs(userCollection(storeName));
+    } catch (error) {
+      // Si las reglas de Firebase aún no permiten acceder a la ruta privada,
+      // no repetir una solicitud denegada por cada documento antiguo.
+      console.warn("No se pudo acceder a la colección privada " + storeName + "; se detiene la migración antigua sin borrar datos:", error?.message || error);
+      return;
+    }
+
+    const existingIds = new Set(targetSnapshot.docs.map(item => item.id));
+    let batch = writeBatch(cloudDb);
+    let writes = 0;
     for (const oldDoc of legacySnapshot.docs) {
-      const target = userDoc(storeName, oldDoc.id);
-      try {
-        const existing = await getDoc(target);
-        if (!existing.exists()) await setDoc(target, oldDoc.data());
-      } catch (error) {
-        console.warn("No se pudo migrar " + storeName + "/" + oldDoc.id + ":", error?.message || error);
+      if (existingIds.has(oldDoc.id)) continue;
+      batch.set(userDoc(storeName, oldDoc.id), oldDoc.data());
+      writes++;
+      if (writes === 450) {
+        await batch.commit();
+        batch = writeBatch(cloudDb);
+        writes = 0;
       }
     }
+    if (writes) await batch.commit();
   }
 }
 
