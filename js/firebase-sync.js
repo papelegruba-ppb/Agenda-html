@@ -388,6 +388,7 @@ async function applyStoreSnapshot(storeName, snapshot) {
   } catch (_) {}
 }
 async function syncStore(storeName) {
+  setSyncStatus("connecting", "Papelegruba · sincronizando " + storeName + "…");
   const [allLocalRecords, cloudSnapshot] = await Promise.all([readStore(storeName), getDocs(otherCols[storeName])]);
   const localRecords = allLocalRecords.filter(record => !isLocalOnlySetting(storeName, recordKey(storeName, record)));
   const cloudByKey = new Map(cloudSnapshot.docs
@@ -534,6 +535,7 @@ window.addEventListener("papelegruba:data-change", event => {
 async function migrateLegacyCloudData() {
   const legacyStores = ["tareas", ...OTHER_STORES.map(name => "sync_" + name), "sync_activeTimer"];
   for (const storeName of legacyStores) {
+    setSyncStatus("connecting", "Papelegruba · comprobando datos anteriores (" + storeName + ")…");
     let legacySnapshot;
     try {
       legacySnapshot = await getDocs(collection(cloudDb, storeName));
@@ -575,6 +577,7 @@ async function migrateLegacyCloudData() {
 
 async function initializeOtherStores() {
   for (const storeName of OTHER_STORES) await syncStore(storeName);
+  setSyncStatus("connecting", "Papelegruba · preparando cronómetro…");
   const timerSnapshot = await getDocs(userCollection("sync_activeTimer"));
   const currentTimer = timerSnapshot.docs.find(item => item.id === "current");
   if (currentTimer) await syncTimerFromCloud({ exists: () => true, data: () => currentTimer.data() });
@@ -603,8 +606,10 @@ export async function subirTareasLocalesIniciales() {
   setSyncStatus("connecting", "Papelegruba · comprobando conexión con Firebase…");
   try {
     await initDB();
+    setSyncStatus("connecting", "Papelegruba · preparando datos locales…");
     await migrateLegacyCloudData();
     await initializeOtherStores();
+    setSyncStatus("connecting", "Papelegruba · sincronizando tareas…");
     const [localTasks, cloudSnapshot] = await Promise.all([getAllTasks(), getDocs(tareasCol)]);
     const cloudById = new Map(cloudSnapshot.docs.map(item => [item.id, item]));
     const localById = new Map(localTasks.filter(task => task?.id).map(task => [String(task.id), task]));
