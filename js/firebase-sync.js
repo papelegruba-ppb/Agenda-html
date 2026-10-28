@@ -643,3 +643,48 @@ export async function subirTareasLocalesIniciales() {
     initializing = false;
   }
 }
+
+// Al recuperar internet, reintenta la sincronización de todo lo que quedó guardado localmente.
+// Firebase mantiene los cambios en IndexedDB de la agenda; este reintento los publica en cuanto vuelve la conexión.
+let reconnectSyncRunning = false;
+window.addEventListener("online", async () => {
+  if (!ready || initializing || reconnectSyncRunning) return;
+  reconnectSyncRunning = true;
+  setSyncStatus("connecting", "Papelegruba · conexión recuperada; sincronizando cambios pendientes…");
+  try {
+    await (snapshotQueue = snapshotQueue.then(async () => {
+      const [localTasks, cloudSnapshot] = await Promise.all([getAllTasks(), getDocs(tareasCol)]);
+      const cloudById = new Map(cloudSnapshot.docs.map(item => [item.id, item]));
+      const localById = new Map(localTasks.filter(task => task?.id).map(task => [String(task.id), task]));
+      for (const local of localTasks) {
+        if (!local?.id) continue;
+        const id = String(local.id);
+        const remoteDoc = cloudById.get(id);
+        if (!remoteDoc) {
+          await uploadTask(local);
+          continue;
+        }
+        const remote = normalizeCloudTask(id, remoteDoc.data());
+        if (stamp(local.updatedAt) >= stamp(remote.updatedAt)) await uploadTask(local);
+        else await writeLocalFromCloud(remote);
+      }
+      for (const remoteDoc of cloudSnapshot.docs) {
+        if (!localById.has(remoteDoc.id)) await applyRemoteDocument(remoteDoc);
+      }
+    }));
+    await (otherSyncQueue = otherSyncQueue.then(async () => {
+      for (const storeName of OTHER_STORES) await syncStore(storeName);
+      await syncTrashTombstones();
+      const timerRaw = localStorage.getItem("papelegruba-timer-active");
+      let timerRecord = null;
+      try { timerRecord = timerRaw ? JSON.parse(timerRaw) : null; } catch (_) {}
+      await setDoc(timerDoc, { record: timerRecord, updatedAt: nowIso(), deleted: !timerRecord });
+    }));
+    setSyncStatus("connected", "Sesión: " + signedInUser.email + " · sincronización activa y conexión recuperada");
+  } catch (error) {
+    console.error("No se pudieron reenviar los cambios pendientes tras recuperar internet:", error);
+    setSyncStatus("error", "Se recuperó internet, pero la sincronización necesita atención: " + (error?.message || error));
+  } finally {
+    reconnectSyncRunning = false;
+  }
+});
