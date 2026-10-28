@@ -17,6 +17,29 @@ const app = initializeApp(firebaseConfig);
 const cloudDb = getFirestore(app);
 const tareasCol = collection(cloudDb, "tareas");
 
+// Indicador visible: los errores de Firebase no deben quedar ocultos en la consola.
+function setSyncStatus(state, message) {
+  let el = document.getElementById("papelegruba-sync-status");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "papelegruba-sync-status";
+    el.setAttribute("role", "status");
+    el.style.cssText = "position:fixed;left:12px;bottom:12px;z-index:99999;max-width:min(440px,calc(100vw - 24px));padding:9px 12px;border-radius:10px;font:12px/1.4 system-ui,sans-serif;box-shadow:0 2px 12px #0002;border:1px solid #d8d2df;background:#faf8fc;color:#3f3f46;";
+    document.body.appendChild(el);
+  }
+  const styles = {
+    connecting: ["#faf3c0", "#514b20"],
+    connected: ["#e5f6ec", "#14532d"],
+    error: ["#fee2e2", "#991b1b"]
+  };
+  const colors = styles[state] || styles.connecting;
+  el.style.background = colors[0];
+  el.style.color = colors[1];
+  el.textContent = message;
+  window.dispatchEvent(new CustomEvent("papelegruba:sync-status", { detail: { state, message } }));
+}
+setSyncStatus("connecting", "Papelegruba · conectando con Firebase…");
+
 let ready = false;
 let initializing = false;
 let queuedSnapshot = null;
@@ -172,9 +195,10 @@ onSnapshot(tareasCol, snapshot => {
   }
   snapshotQueue = snapshotQueue
     .then(() => applySnapshot(snapshot, false))
-    .catch(error => console.error("Error al aplicar cambios de Firebase:", error));
+    .catch(error => { console.error("Error al aplicar cambios de Firebase:", error); setSyncStatus("error", "Firebase: " + (error?.message || error)); });
 }, error => {
   console.error("Error de escucha de Firebase:", error);
+  setSyncStatus("error", "Firebase no permite sincronizar: " + (error?.message || error));
 });
 
 window.addEventListener("papelegruba:task-change", event => {
@@ -184,12 +208,13 @@ window.addEventListener("papelegruba:task-change", event => {
   snapshotQueue = snapshotQueue.then(async () => {
     if (action === "delete") await deleteDoc(doc(cloudDb, "tareas", String(task.id)));
     else if (action === "upsert") await uploadTask(task);
-  }).catch(error => console.error("No se pudo sincronizar el cambio con Firebase:", error));
+  }).catch(error => { console.error("No se pudo sincronizar el cambio con Firebase:", error); setSyncStatus("error", "No se pudo guardar en la nube: " + (error?.message || error)); });
 });
 
 export async function subirTareasLocalesIniciales() {
   if (initializing || ready) return;
   initializing = true;
+  setSyncStatus("connecting", "Papelegruba · comprobando conexión con Firebase…");
   try {
     await initDB();
     const [localTasks, cloudSnapshot] = await Promise.all([getAllTasks(), getDocs(tareasCol)]);
@@ -217,11 +242,15 @@ export async function subirTareasLocalesIniciales() {
     }
 
     ready = true;
+    setSyncStatus("connected", "Firebase conectado · sincronización de tareas activa");
     if (queuedSnapshot) {
       const latest = queuedSnapshot;
       queuedSnapshot = null;
       await applySnapshot(latest, true);
     }
+  } catch (error) {
+    setSyncStatus("error", "Firebase no sincroniza: " + (error?.message || error));
+    throw error;
   } finally {
     initializing = false;
   }
