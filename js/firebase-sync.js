@@ -1,4 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import {
   getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
@@ -14,8 +15,72 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const EXPECTED_GOOGLE_EMAIL = "pelegribassipatricia@gmail.com";
+const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: "select_account" });
+
+function requireGoogleAccount() {
+  return new Promise((resolve) => {
+    let settled = false;
+    let overlay = document.getElementById("papelegruba-auth-gate");
+    if (!overlay) {
+      overlay = document.createElement("section");
+      overlay.id = "papelegruba-auth-gate";
+      overlay.style.cssText = "position:fixed;inset:0;z-index:100000;background:#faf8fc;color:#3f3f46;display:flex;align-items:center;justify-content:center;padding:24px;font:15px/1.5 system-ui,sans-serif;";
+      overlay.innerHTML = '<div style="width:min(440px,100%);background:white;border:1px solid #e8e4ee;border-radius:18px;padding:26px;box-shadow:0 8px 36px #0001"><h2 style="margin:0 0 8px">Papelegruba · sincronización</h2><p>Inicia sesión con la cuenta de Google que quieres usar en el PC y en el móvil.</p><p style="font-weight:600;overflow-wrap:anywhere">pelegribassipatricia@gmail.com</p><button id="papelegruba-google-login" type="button" style="border:0;border-radius:10px;padding:12px 16px;background:#8e7cc3;color:white;font-weight:600;width:100%;cursor:pointer">Continuar con Google</button><p id="papelegruba-auth-message" role="status" style="font-size:13px;margin-bottom:0">La sincronización de datos se activará al iniciar sesión.</p></div>';
+      document.body.appendChild(overlay);
+    }
+    const button = overlay.querySelector("#papelegruba-google-login");
+    const message = overlay.querySelector("#papelegruba-auth-message");
+    const finish = user => {
+      if (settled) return;
+      settled = true;
+      overlay.remove();
+      resolve(user);
+    };
+    onAuthStateChanged(auth, user => {
+      if (!user) return;
+      if ((user.email || "").toLowerCase() !== EXPECTED_GOOGLE_EMAIL) {
+        message.textContent = "Has iniciado sesión con " + (user.email || "otra cuenta") + ". Se necesita " + EXPECTED_GOOGLE_EMAIL + ". Cerrando esa sesión…";
+        signOut(auth).catch(() => {});
+        return;
+      }
+      finish(user);
+    }, error => {
+      message.textContent = "No se pudo comprobar la sesión: " + (error.message || error);
+    });
+    getRedirectResult(auth).catch(error => {
+      message.textContent = "No se pudo completar el inicio de sesión: " + (error.message || error);
+    });
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = "Conectando…";
+      message.textContent = "Abriendo Google…";
+      try {
+        await signInWithPopup(auth, provider);
+      } catch (error) {
+        if (error.code === "auth/popup-blocked" || error.code === "auth/cancelled-popup-request") {
+          try { await signInWithRedirect(auth, provider); return; } catch (redirectError) {
+            message.textContent = "No se pudo abrir Google: " + (redirectError.message || redirectError);
+          }
+        } else {
+          message.textContent = "No se pudo iniciar sesión: " + (error.message || error) + ". Comprueba que Google esté habilitado en Firebase Authentication.";
+        }
+      } finally {
+        button.disabled = false;
+        button.textContent = "Continuar con Google";
+      }
+    });
+  });
+}
+
+const signedInUser = await requireGoogleAccount();
+const currentUid = signedInUser.uid;
 const cloudDb = getFirestore(app);
-const tareasCol = collection(cloudDb, "tareas");
+const userCollection = name => collection(cloudDb, "users", currentUid, name);
+const userDoc = (name, id) => doc(cloudDb, "users", currentUid, name, String(id));
+const tareasCol = userCollection("tareas");
 
 // Indicador visible: los errores de Firebase no deben quedar ocultos en la consola.
 function setSyncStatus(state, message) {
@@ -135,7 +200,7 @@ async function applyRemoteDocument(docSnapshot) {
       const canonical = await readLocalTask(equivalent.id);
       if (canonical) await uploadTask(canonical);
       if (String(remote.id) !== String(equivalent.id)) {
-        await deleteDoc(doc(cloudDb, "tareas", String(remote.id)));
+        await deleteDoc(userDoc("tareas", remote.id));
       }
       return;
     }
@@ -151,7 +216,7 @@ async function applyRemoteDocument(docSnapshot) {
 async function uploadTask(task) {
   if (!task?.id) return;
   const fullTask = { ...task, id: String(task.id) };
-  await setDoc(doc(cloudDb, "tareas", fullTask.id), {
+  await setDoc(userDoc("tareas", fullTask.id), {
     task: fullTask,
     updatedAt: fullTask.updatedAt || nowIso(),
     schemaVersion: 2
@@ -206,7 +271,7 @@ window.addEventListener("papelegruba:task-change", event => {
   const { action, task } = event.detail || {};
   if (!task?.id) return;
   snapshotQueue = snapshotQueue.then(async () => {
-    if (action === "delete") await deleteDoc(doc(cloudDb, "tareas", String(task.id)));
+    if (action === "delete") await deleteDoc(userDoc("tareas", task.id));
     else if (action === "upsert") await uploadTask(task);
   }).catch(error => { console.error("No se pudo sincronizar el cambio con Firebase:", error); setSyncStatus("error", "No se pudo guardar en la nube: " + (error?.message || error)); });
 });
@@ -215,7 +280,7 @@ window.addEventListener("papelegruba:task-change", event => {
 // Sincronización adicional de todos los almacenes locales de IndexedDB.
 // Las tareas mantienen compatibilidad con la colección histórica "tareas".
 const OTHER_STORES = ["projects", "notes", "habits", "healthEpisodes", "medicationIntakes", "trash", "sessions", "payments", "settings"];
-const otherCols = Object.fromEntries(OTHER_STORES.map(name => [name, collection(cloudDb, "sync_" + name)]));
+const otherCols = Object.fromEntries(OTHER_STORES.map(name => [name, userCollection("sync_" + name)]));
 const otherQueuedSnapshots = Object.create(null);
 let otherReady = false;
 let otherSyncQueue = Promise.resolve();
@@ -265,7 +330,7 @@ async function uploadStoreRecord(storeName, record, forcedUpdatedAt = null) {
   if (key == null) return;
   const updatedAt = forcedUpdatedAt || record.updatedAt || record.createdAt || nowIso();
   const normalized = { ...record, updatedAt };
-  await setDoc(doc(cloudDb, "sync_" + storeName, cloudKey(key)), {
+  await setDoc(userDoc("sync_" + storeName, cloudKey(key)), {
     key,
     record: normalized,
     updatedAt,
@@ -366,7 +431,7 @@ async function syncTrashTombstones() {
     if (storeName === "tasks") {
       await deleteDoc(doc(cloudDb, "tareas", String(key)));
     } else {
-      await setDoc(doc(cloudDb, "sync_" + storeName, cloudKey(key)), {
+      await setDoc(userDoc("sync_" + storeName, cloudKey(key)), {
         key: String(key), deleted: true, updatedAt: deletedAt, schemaVersion: 1
       });
     }
@@ -407,7 +472,7 @@ window.addEventListener("papelegruba:data-change", event => {
 });
 
 // El cronómetro vive en localStorage, no en IndexedDB; se sincroniza por separado.
-const timerDoc = doc(cloudDb, "sync_activeTimer", "current");
+const timerDoc = userDoc("sync_activeTimer", "current");
 let timerSyncReady = false;
 let timerQueuedSnapshot = null;
 async function syncTimerFromCloud(snapshot) {
@@ -455,7 +520,7 @@ window.addEventListener("papelegruba:data-change", event => {
 
 async function initializeOtherStores() {
   for (const storeName of OTHER_STORES) await syncStore(storeName);
-  const timerSnapshot = await getDocs(collection(cloudDb, "sync_activeTimer"));
+  const timerSnapshot = await getDocs(userCollection("sync_activeTimer"));
   const currentTimer = timerSnapshot.docs.find(item => item.id === "current");
   if (currentTimer) await syncTimerFromCloud({ exists: () => true, data: () => currentTimer.data() });
   else {
