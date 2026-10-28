@@ -264,8 +264,7 @@ async function uploadStoreRecord(storeName, record, forcedUpdatedAt = null) {
   const key = recordKey(storeName, record);
   if (key == null) return;
   const updatedAt = forcedUpdatedAt || record.updatedAt || record.createdAt || nowIso();
-  const normalized = { ...record };
-  if (!normalized.updatedAt) normalized.updatedAt = updatedAt;
+  const normalized = { ...record, updatedAt };
   await setDoc(doc(cloudDb, "sync_" + storeName, cloudKey(key)), {
     key,
     record: normalized,
@@ -274,7 +273,7 @@ async function uploadStoreRecord(storeName, record, forcedUpdatedAt = null) {
     schemaVersion: 1
   });
   // Normaliza la marca temporal local para que futuras modificaciones se puedan comparar.
-  if (!record.updatedAt && storeName !== "settings") await putStoreRecord(storeName, normalized);
+  if (record.updatedAt !== updatedAt) await putStoreRecord(storeName, normalized);
 }
 async function applyStoreSnapshot(storeName, snapshot) {
   const localRecords = await readStore(storeName);
