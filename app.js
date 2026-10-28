@@ -14,6 +14,7 @@ import { getActiveTimer, getElapsedMs, formatElapsed, onChange } from "./js/hour
 
 // IMPORTAMOS FIREBASE (El nuevo sistema de sincronización instantánea)
 import { subirTareasLocalesIniciales } from "./js/firebase-sync.js";
+import { installGoogleSyncListeners, trySyncOnOpen } from "./js/google-sync.js";
 
 // NOTA: Hemos quitado las importaciones de google-sync.js, drive-sync.js y auto-backup.js
 // para que no te pida la cuenta de Google al abrir ni duplique tareas.
@@ -103,7 +104,16 @@ onChange(updateFloatingBadge);
     } catch (e) {
       console.error("Error al iniciar Firebase:", e);
     }
-    
+
+    // Calendar/Tasks se autoriza de forma explícita desde Ajustes.
+    // Si ya estaba conectado, se intenta la sincronización silenciosa al abrir.
+    installGoogleSyncListeners();
+    try {
+      await trySyncOnOpen();
+    } catch (e) {
+      console.info("Google Calendar pendiente de autorización:", e?.message || e);
+    }
+
     await navigate("day");
     
     if ("serviceWorker" in navigator) {
