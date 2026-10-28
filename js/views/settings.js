@@ -16,7 +16,7 @@ export async function renderSettings(root) {
         <h3>Copia de seguridad local</h3>
         <p class="hint">
           Descarga un archivo JSON con todos tus datos (tareas, hábitos, proyectos, notas, salud, papelera...).
-          <strong>Importante:</strong> la versión actual de Firebase solo sincroniza las tareas. El estado de conexión aparece en el indicador inferior; los demás apartados siguen guardados localmente en cada dispositivo.
+          <strong>Sincronización Firebase:</strong> tareas, proyectos, notas, hábitos, sesiones, cobros, ajustes, salud, medicación, papelera y cronómetro. El indicador inferior muestra si Firebase acepta la conexión.
         </p>
         <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
         
