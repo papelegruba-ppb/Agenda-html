@@ -4,6 +4,7 @@ import {
   mergeBackupData, getTrash, restoreTrashItem, permanentlyDeleteTrashItem
 } from "../db.js";
 import { getActiveTimer } from "../hours.js";
+import { syncGoogleData } from "../google-sync.js";
 
 export async function renderSettings(root) {
   const count = (await getAllTasks()).length;
@@ -11,6 +12,14 @@ export async function renderSettings(root) {
   root.innerHTML = `
     <div class="settings-view">
       <h2 class="view-title">Ajustes</h2>
+
+      <section class="settings-block">
+        <h3>Google Calendar y Google Tasks</h3>
+        <p class="hint">Conecta la misma cuenta de Google que utilizas para iniciar sesión en Papelegruba. La aplicación comprobará el correo antes de sincronizar.</p>
+        <p class="hint small">Cuenta requerida: <strong>pelegribassipatricia@gmail.com</strong></p>
+        <div class="gcal-actions"><button class="btn-ghost" id="btnGoogleConnect">Conectar y sincronizar Google</button></div>
+        <p class="hint small" id="googleSyncMsg" role="status"></p>
+      </section>
 
       <section class="settings-block">
         <h3>Copia de seguridad local</h3>
@@ -42,6 +51,20 @@ export async function renderSettings(root) {
   `;
 
   const localMsg = root.querySelector("#localMsg");
+  const googleSyncMsg = root.querySelector("#googleSyncMsg");
+  root.querySelector("#btnGoogleConnect")?.addEventListener("click", async () => {
+    const button = root.querySelector("#btnGoogleConnect");
+    button.disabled = true;
+    googleSyncMsg.textContent = "Conectando con Google y comprobando la cuenta…";
+    try {
+      const result = await syncGoogleData({ interactive: true });
+      googleSyncMsg.textContent = "Sincronización completada" + (result?.completedAt ? ": " + result.completedAt : "") + ".";
+    } catch (error) {
+      googleSyncMsg.textContent = "No se pudo completar la sincronización: " + (error?.message || error);
+    } finally {
+      button.disabled = false;
+    }
+  });
 
   /* Papelera */
   root.querySelector("#btnShowTrash")?.addEventListener("click", refreshTrash);
