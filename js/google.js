@@ -45,18 +45,34 @@ export async function requestToken({ silent = false } = {}) {
   if (!tokenClient) await initGoogle();
 
   return new Promise((resolve, reject) => {
-    tokenClient.callback = (resp) => {
+    tokenClient.callback = async (resp) => {
       if (resp.error) {
         reject(new Error(resp.error));
         return;
       }
-      accessToken = resp.access_token;
-      tokenExpiresAt = Date.now() + (resp.expires_in || 3600) * 1000;
-      setSetting("googleConnected", true);
-      resolve(accessToken);
+      try {
+        const identityResponse = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+          headers: { Authorization: "Bearer " + resp.access_token }
+        });
+        if (!identityResponse.ok) throw new Error("Google no ha permitido comprobar la cuenta del calendario.");
+        const identity = await identityResponse.json();
+        const expectedEmail = "pelegribassipatricia@gmail.com";
+        if ((identity.email || "").toLowerCase() !== expectedEmail || identity.email_verified !== true) {
+          try { google.accounts.oauth2.revoke(resp.access_token, () => {}); } catch (_) {}
+          throw new Error("Has autorizado Google Calendar con " + (identity.email || "otra cuenta") + ". Usa " + expectedEmail + " para que coincida con Papelegruba.");
+        }
+        accessToken = resp.access_token;
+        tokenExpiresAt = Date.now() + (resp.expires_in || 3600) * 1000;
+        currentEmail = identity.email;
+        await setSetting("googleEmail", identity.email);
+        await setSetting("googleConnected", true);
+        resolve(accessToken);
+      } catch (error) {
+        reject(error);
+      }
     };
     tokenClient.requestAccessToken({
-      prompt: silent || accessToken ? "" : "consent"
+      prompt: silent || accessToken ? "" : "select_account consent"
     });
   });
 }
