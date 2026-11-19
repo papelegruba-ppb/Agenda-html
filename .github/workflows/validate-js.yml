@@ -2,7 +2,7 @@ name: Validar JavaScript y datos
 
 on:
   push:
-    branches: ["main", "feature/control-salud-backup-completo"]
+    branches: ["main", "feature/control-salud-backup-completo", "fix/remove-health-dedupe-sync"]
   pull_request:
     branches: ["main"]
 
