@@ -15,7 +15,7 @@ const timestamp = value => value ? Date.parse(value) || 0 : 0;
 const nowIso = () => new Date().toISOString();
 
 function eventFingerprint(task) {
-  return [String(task.title || "").trim().toLocaleLowerCase(), task.date || "", task.time || ""].join("|");
+  return JSON.stringify([String(task.title || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim().toLocaleLowerCase("es").replace(/\\s+/g, " "), task.date || "", task.time || "", String(task.notes || "").replace(/\\r\\n?/g, "\\n").trim()]);
 }
 
 function calendarPayload(task) {
@@ -335,7 +335,7 @@ export function installGoogleSyncListeners() {
         } else {
           // NUEVO: Comprobación para no duplicar en Calendar
           const existentes = await listEvents({ timeMin: task.date + "T00:00:00Z", timeMax: task.date + "T23:59:59Z" });
-          const eventoIgual = (existentes.items || []).find(e => e.summary?.trim().toLowerCase() === task.title?.trim().toLowerCase());
+          const eventoIgual = (existentes.items || []).find(e => eventFingerprint(gcalEventToTask(e)) === eventFingerprint(task));
           if (eventoIgual) {
             await saveLocal(task, { gcalEventId: eventoIgual.id, gcalUpdated: eventoIgual.updated || nowIso(), gcalSyncedAt: nowIso() });
           } else {
