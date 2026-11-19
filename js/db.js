@@ -501,6 +501,7 @@ export async function mergeBackupData(data) {
   });
 }
 export async function replaceSyncedCollections(data) {
+  const previousTasks = await getAllTasks();
   const db = await initDB();
   const names = ["tasks", "habits", "projects", "notes", "sessions", "payments", "trash"];
   return new Promise((resolve, reject) => {
@@ -515,7 +516,27 @@ export async function replaceSyncedCollections(data) {
       }
     }
     t.oncomplete = () => {
-      try { window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "drive-sync" } })); } catch (_) {}
+      try {
+        window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: "drive-sync" } }));
+        const nextTasks = (Array.isArray(data.tasks) ? data.tasks : []).filter(item => item && item.id != null);
+        const nextById = new Map(nextTasks.map(item => [String(item.id), item]));
+        const previousById = new Map(previousTasks.map(item => [String(item.id), item]));
+        for (const previous of previousTasks) {
+          if (!nextById.has(String(previous.id))) {
+            window.dispatchEvent(new CustomEvent("papelegruba:task-change", {
+              detail: { action: "delete", task: previous, source: "drive-sync" }
+            }));
+          }
+        }
+        for (const task of nextTasks) {
+          const previous = previousById.get(String(task.id));
+          if (!previous || JSON.stringify(previous) !== JSON.stringify(task)) {
+            window.dispatchEvent(new CustomEvent("papelegruba:task-change", {
+              detail: { action: "upsert", task, source: "drive-sync" }
+            }));
+          }
+        }
+      } catch (_) {}
       resolve(count);
     };
     t.onerror = () => reject(t.error);
