@@ -177,12 +177,12 @@ function stableRecordValue(value) {
   }
   return value;
 }
-function localDuplicateFingerprint(collection, item) {
+function isChecklistRecord(item) {\n  return item?.isChecklist === true || (!item?.date && !item?.gcalEventId && (item?.type || "personal") !== "medical");\n}\nfunction localDuplicateFingerprint(collection, item) {
   if (collection === "tasks") {
     const title = duplicateText(item?.title || item?.name);
     if (!title) return "";
     return JSON.stringify([title, String(item?.date || item?.dueDate || "").slice(0, 10),
-      duplicateText(item?.notes || item?.note || item?.description), item?.isChecklist === true]);
+      duplicateText(item?.notes || item?.note || item?.description), isChecklistRecord(item)]);
   }
   const meaningful = stableRecordValue(item || {});
   if (!Object.keys(meaningful).length) return "";
@@ -448,7 +448,7 @@ function backupDuplicateKey(collection, item) {
     if (!name) return "";
     const date = String(item.date || item.dueDate || item.startDate || item.startAt || "").slice(0, 10);
     const notes = normalizeDuplicateText(item.notes || item.note || item.description || "");
-    return [name, date, notes, item.isChecklist === true].join("|");
+    return [name, date, notes, isChecklistRecord(item)].join("|");
   }
   if (["projects", "habits", "notes", "sessions", "payments"].includes(collection)) {
     return JSON.stringify(stableRecordValue(item));
