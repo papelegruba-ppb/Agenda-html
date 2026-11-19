@@ -14,6 +14,7 @@ import { getActiveTimer, getElapsedMs, formatElapsed, onChange } from "./js/hour
 // IMPORTAMOS FIREBASE (El nuevo sistema de sincronización instantánea)
 import { subirTareasLocalesIniciales } from "./js/firebase-sync.js";
 import { installGoogleSyncListeners, trySyncOnOpen } from "./js/google-sync.js";
+import { installDriveSyncListeners } from "./js/drive-sync.js";
 
 // NOTA: Hemos quitado las importaciones de google-sync.js, drive-sync.js y auto-backup.js
 // para que no te pida la cuenta de Google al abrir ni duplique tareas.
@@ -106,6 +107,10 @@ onChange(updateFloatingBadge);
     } catch (e) {
       console.error("Error al iniciar Firebase:", e);
     }
+
+    // Google Drive se reactiva después de completar el arranque de Firebase,
+    // para que ambas nubes trabajen sobre la misma base local ya conciliada.
+    installDriveSyncListeners();
 
     // Calendar/Tasks se autoriza de forma explícita desde Ajustes.
     // Si ya estaba conectado, se intenta la sincronización silenciosa al abrir.
