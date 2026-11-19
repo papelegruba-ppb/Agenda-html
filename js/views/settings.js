@@ -4,6 +4,7 @@ import {
   mergeBackupData, getTrash, restoreTrashItem, permanentlyDeleteTrashItem
 } from "../db.js";
 import { getActiveTimer } from "../hours.js";
+import { connectDriveSync, getDriveSyncAccount, disconnectDriveSync, previewDriveSync, applyDriveSync } from "../drive-sync.js";
 import { syncGoogleData } from "../google-sync.js";
 
 export async function renderSettings(root) {
@@ -19,6 +20,18 @@ export async function renderSettings(root) {
         <p class="hint small">Cuenta requerida: <strong>pelegribassipatricia@gmail.com</strong></p>
         <div class="gcal-actions"><button class="btn-ghost" id="btnGoogleConnect">Conectar y sincronizar Google</button></div>
         <p class="hint small" id="googleSyncMsg" role="status"></p>
+      </section>
+
+      <section class="settings-block" id="driveSyncBlock">
+        <h3>Sincronización con Google Drive</h3>
+        <p class="hint">Mantiene una copia sincronizada en el espacio privado de Papelegruba (appDataFolder). No accede a tus documentos normales de Drive. Firebase sigue activo; ambas nubes se concilian usando Agenda HTML como referencia principal.</p>
+        <p class="hint small" id="driveSyncAccountLabel">Comprobando cuenta de Google Drive…</p>
+        <div class="gcal-actions">
+          <button class="btn-ghost" id="btnDriveChooseAccount">Conectar Google Drive</button>
+          <button class="btn-primary" id="btnDriveSyncNow">Sincronizar ahora</button>
+          <button class="btn-ghost" id="btnDriveSyncDisconnect">Desvincular</button>
+        </div>
+        <p class="hint small" id="driveSyncMsg" role="status">La sincronización automática funciona mientras la agenda está abierta y Google mantiene la autorización. No funciona con el navegador completamente cerrado.</p>
       </section>
 
       <section class="settings-block">
@@ -64,6 +77,71 @@ export async function renderSettings(root) {
     } finally {
       button.disabled = false;
     }
+  });
+
+  const driveSyncMsg = root.querySelector("#driveSyncMsg");
+  const driveSyncAccountLabel = root.querySelector("#driveSyncAccountLabel");
+  async function refreshDriveSyncAccountLabel() {
+    const account = await getDriveSyncAccount();
+    if (driveSyncAccountLabel) {
+      driveSyncAccountLabel.textContent = account.connected && account.email
+        ? "Conectado: " + account.email
+        : "Google Drive todavía no está conectado en este dispositivo.";
+    }
+    return account;
+  }
+  await refreshDriveSyncAccountLabel();
+
+  window.addEventListener("papelegruba:drive-sync-status", event => {
+    const status = event.detail || {};
+    if (!driveSyncMsg) return;
+    driveSyncMsg.textContent = status.ok
+      ? "Drive sincronizado: " + new Date(status.at || Date.now()).toLocaleString("es-ES") +
+        (status.conflicts ? " · " + status.conflicts + " diferencias conciliadas a favor de Agenda HTML." : "")
+      : "Sincronización pendiente: " + (status.message || "vuelve a autorizar Google Drive desde Ajustes.");
+  });
+
+  root.querySelector("#btnDriveChooseAccount")?.addEventListener("click", async () => {
+    const button = root.querySelector("#btnDriveChooseAccount");
+    button.disabled = true;
+    if (driveSyncMsg) driveSyncMsg.textContent = "Solicitando autorización de Google Drive…";
+    try {
+      const result = await connectDriveSync({ chooseAccount: true });
+      await refreshDriveSyncAccountLabel();
+      if (driveSyncMsg) driveSyncMsg.textContent = "Cuenta autorizada: " + (result.email || "Google") + ". La sincronización automática ya está activada.";
+    } catch (error) {
+      if (driveSyncMsg) driveSyncMsg.textContent = "No se pudo conectar Drive: " + (error?.message || error);
+    } finally { button.disabled = false; }
+  });
+
+  root.querySelector("#btnDriveSyncNow")?.addEventListener("click", async () => {
+    const button = root.querySelector("#btnDriveSyncNow");
+    button.disabled = true;
+    if (driveSyncMsg) driveSyncMsg.textContent = "Comparando Agenda HTML y Google Drive…";
+    try {
+      const account = await getDriveSyncAccount();
+      if (!account.connected || !account.email) throw new Error("Conecta primero Google Drive.");
+      let plan;
+      try { plan = await previewDriveSync(); }
+      catch (error) {
+        if (!/autorización de Drive ha caducado|Elige primero una cuenta de Google/i.test(error?.message || "")) throw error;
+        await connectDriveSync({ chooseAccount: false });
+        plan = await previewDriveSync();
+      }
+      await applyDriveSync(plan);
+      if (driveSyncMsg) driveSyncMsg.textContent =
+        "Sincronización completada: " + Object.values(plan.merged).reduce((sum, items) => sum + items.length, 0) +
+        " registros conciliados. " + plan.conflicts.length + " diferencias resueltas a favor de Agenda HTML.";
+    } catch (error) {
+      if (driveSyncMsg) driveSyncMsg.textContent = "No se pudo sincronizar: " + (error?.message || error);
+    } finally { button.disabled = false; }
+  });
+
+  root.querySelector("#btnDriveSyncDisconnect")?.addEventListener("click", async () => {
+    if (!confirm("¿Desvincular Google Drive de este dispositivo? Los datos locales y el archivo remoto se conservarán.")) return;
+    await disconnectDriveSync();
+    await refreshDriveSyncAccountLabel();
+    if (driveSyncMsg) driveSyncMsg.textContent = "Drive desvinculado. No se ha borrado ningún dato.";
   });
 
   /* Papelera */
