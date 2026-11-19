@@ -125,7 +125,6 @@ function taskFingerprint(task) {
     normalize(task?.title),
     String(task?.date || "").slice(0, 10),
     normalize(task?.notes),
-    task?.type || "personal",
     task?.isChecklist === true
   ]);
 }
