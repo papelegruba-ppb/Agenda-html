@@ -16,8 +16,6 @@ import { subirTareasLocalesIniciales } from "./js/firebase-sync.js";
 import { installGoogleSyncListeners, trySyncOnOpen } from "./js/google-sync.js";
 import { installDriveSyncListeners } from "./js/drive-sync.js";
 
-// NOTA: Hemos quitado las importaciones de google-sync.js, drive-sync.js y auto-backup.js
-// para que no te pida la cuenta de Google al abrir ni duplique tareas.
 
 const views = {
   year: renderYear,
