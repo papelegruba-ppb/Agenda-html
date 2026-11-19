@@ -279,7 +279,7 @@ window.addEventListener("papelegruba:task-change", event => {
 
 // Sincronización adicional de todos los almacenes locales de IndexedDB.
 // Las tareas mantienen compatibilidad con la colección histórica "tareas".
-const OTHER_STORES = ["projects", "notes", "habits", "healthEpisodes", "medicationIntakes", "trash", "sessions", "payments", "settings"];
+const OTHER_STORES = ["projects", "notes", "habits", "trash", "sessions", "payments", "settings"];
 const otherCols = Object.fromEntries(OTHER_STORES.map(name => [name, userCollection("sync_" + name)]));
 const otherQueuedSnapshots = Object.create(null);
 let otherReady = false;
