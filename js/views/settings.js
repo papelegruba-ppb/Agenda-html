@@ -1,6 +1,6 @@
 import {
   getAllTasks, getAllHabits, getAllProjects, getAllNotes, getAllSessions,
-  getAllPayments, getAllSettings, getAllHealthEpisodes, getAllMedicationIntakes,
+  getAllPayments, getAllSettings,
   mergeBackupData, getTrash, restoreTrashItem, permanentlyDeleteTrashItem
 } from "../db.js";
 import { getActiveTimer } from "../hours.js";
@@ -24,8 +24,8 @@ export async function renderSettings(root) {
       <section class="settings-block">
         <h3>Copia de seguridad local</h3>
         <p class="hint">
-          Descarga un archivo JSON con todos tus datos (tareas, hábitos, proyectos, notas, salud, papelera...).
-          <strong>Sincronización Firebase:</strong> tareas, proyectos, notas, hábitos, sesiones, cobros, ajustes, salud, medicación, papelera y cronómetro. El indicador inferior muestra si Firebase acepta la conexión.
+          Descarga un archivo JSON con todos tus datos (tareas, hábitos, proyectos, notas, sesiones, cobros y papelera...).
+          <strong>Sincronización Firebase:</strong> tareas, proyectos, notas, hábitos, sesiones, cobros, ajustes, papelera y cronómetro. El indicador inferior muestra si Firebase acepta la conexión.
         </p>
         <p class="hint small">Tienes <span id="taskCount">${count}</span> tareas guardadas en este dispositivo.</p>
         
@@ -105,16 +105,16 @@ export async function renderSettings(root) {
 
   /* Exportar JSON */
   root.querySelector("#btnExport").onclick = async () => {
-    const [tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash] = await Promise.all([
+    const [tasks, habits, projects, notes, sessions, payments, settings, trash] = await Promise.all([
       getAllTasks(), getAllHabits(), getAllProjects(), getAllNotes(), getAllSessions(),
-      getAllPayments(), getAllSettings(), getAllHealthEpisodes(), getAllMedicationIntakes(), getTrash()
+      getAllPayments(), getAllSettings(), getTrash()
     ]);
     const payload = {
       format: "papelegruba-backup",
       version: 4,
       exportedAt: new Date().toISOString(),
       activeTimer: getActiveTimer(),
-      tasks, habits, projects, notes, sessions, payments, settings, healthEpisodes, medicationIntakes, trash
+      tasks, habits, projects, notes, sessions, payments, settings, trash
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -146,7 +146,7 @@ export async function renderSettings(root) {
         return;
       }
 
-      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes", "trash"];
+      const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "trash"];
       const total = collections.reduce((sum, key) => sum + (Array.isArray(data[key]) ? data[key].length : 0), 0);
       if (!total) {
         localMsg.textContent = "⚠️ El archivo no contiene datos reconocibles.";
