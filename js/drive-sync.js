@@ -2,7 +2,7 @@ import { GOOGLE_CLIENT_ID } from "../config.js";
 import { getActiveTimer } from "./hours.js";
 import {
   getAllTasks, getAllHabits, getAllProjects, getAllNotes, getAllSessions,
-  getAllPayments, getAllSettings, getTrash,
+  getAllPayments, getTrash,
   getSetting, setSetting, replaceSyncedCollections
 } from "./db.js";
 
@@ -105,8 +105,10 @@ export function installDriveSyncListeners() {
   }
   // Una PWA estática no recibe notificaciones push de Drive; consulta mientras
   // permanece abierta para recoger cambios realizados desde otros dispositivos.
-  window.setInterval(() => {
-    if (document.visibilityState === "visible") scheduleAutoDriveSync(100);
+  window.setInterval(async () => {
+    if (document.visibilityState !== "visible") return;
+    if (!accessToken || Date.now() >= expiresAt - 30000) await tryReconnectDriveSync();
+    scheduleAutoDriveSync(100);
   }, 30000);
 }
 
@@ -403,7 +405,6 @@ export async function applyDriveSync(plan) {
   }
   // Write cloud first. If the local write fails, the next preview can recover the remote changes.
   await uploadEnvelope(latest.file, plan.merged);
-  const settings = await getAllSettings();
   await replaceSyncedCollections(plan.merged);
   // Restaurar el cronómetro activo y el saldo inicial desde el estado sincronizado.
   const appState = new Map((plan.merged.appState || []).map(item => [item.id, item.value]));
