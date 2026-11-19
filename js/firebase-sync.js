@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRe
 import {
   getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc, getDocs, getDoc, writeBatch
 } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
-import { initDB, getAllTasks } from "./db.js";
+import { initDB, getAllTasks, moveToTrash } from "./db.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAfwZwOB90JNgQ1hewbTGwVsyrDK-GYvPg",
@@ -282,7 +282,7 @@ window.addEventListener("papelegruba:task-change", event => {
 
 // Sincronización adicional de todos los almacenes locales de IndexedDB.
 // Las tareas mantienen compatibilidad con la colección histórica "tareas".
-const OTHER_STORES = ["projects", "notes", "habits", "trash", "sessions", "payments", "settings"];
+const OTHER_STORES = ["projects", "notes", "habits", "sessions", "payments", "settings", "trash"];
 const otherCols = Object.fromEntries(OTHER_STORES.map(name => [name, userCollection("sync_" + name)]));
 const otherQueuedSnapshots = Object.create(null);
 let otherReady = false;
@@ -304,6 +304,14 @@ function stableJSON(value) {
     return "{" + Object.keys(value).sort().map(k => JSON.stringify(k) + ":" + stableJSON(value[k])).join(",") + "}";
   }
   return JSON.stringify(value);
+}
+function storeFingerprint(storeName, record) {
+  if (!["projects", "notes", "habits", "sessions", "payments"].includes(storeName) || !record || typeof record !== "object") return "";
+  const meaningful = { ...record };
+  for (const key of Object.keys(meaningful)) {
+    if (["id", "createdAt", "updatedAt", "modifiedAt", "syncedAt"].includes(key) || /^(gcal|gtask|sync)/i.test(key)) delete meaningful[key];
+  }
+  return stableJSON(meaningful);
 }
 async function readStore(storeName) {
   const db = await initDB();
@@ -356,14 +364,12 @@ async function applyStoreSnapshot(storeName, snapshot) {
     const key = String(data.key ?? decodeURIComponent(change.doc.id));
     if (isLocalOnlySetting(storeName, key)) continue;
     if (change.type === "removed") {
-      // Solo se propagan eliminaciones explícitas (tombstones), nunca se infiere un borrado
-      // por la desaparición de un documento durante una carga inicial.
       if (data.deleted) await deleteStoreRecord(storeName, key);
       continue;
     }
     const local = localByKey.get(key);
     if (data.deleted === true) {
-      if (local && stamp(local.updatedAt) > stamp(data.updatedAt)) {
+      if (local && stamp(local.updatedAt || local.createdAt) > stamp(data.updatedAt)) {
         await uploadStoreRecord(storeName, local);
       } else if (local) {
         await deleteStoreRecord(storeName, key);
@@ -372,6 +378,20 @@ async function applyStoreSnapshot(storeName, snapshot) {
     }
     const remote = data.record;
     if (!remote || typeof remote !== "object") continue;
+    const fingerprint = storeFingerprint(storeName, remote);
+    const equivalent = fingerprint ? localRecords.find(item => recordKey(storeName, item) !== key && storeFingerprint(storeName, item) === fingerprint) : null;
+    if (!local && equivalent) {
+      const localKey = recordKey(storeName, equivalent);
+      const localTime = stamp(equivalent.updatedAt || equivalent.createdAt);
+      const remoteTime = stamp(data.updatedAt || remote.updatedAt || remote.createdAt);
+      if (remoteTime > localTime) {
+        await putStoreRecord(storeName, { ...remote, id: localKey, updatedAt: remote.updatedAt || data.updatedAt || nowIso() });
+      }
+      await setDoc(userDoc("sync_" + storeName, cloudKey(key)), {
+        key, deleted: true, updatedAt: nowIso(), schemaVersion: 1
+      });
+      continue;
+    }
     if (!local) {
       await putStoreRecord(storeName, remote);
       continue;
@@ -379,12 +399,8 @@ async function applyStoreSnapshot(storeName, snapshot) {
     if (stableJSON(local) === stableJSON(remote)) continue;
     const localTime = stamp(local.updatedAt || local.createdAt);
     const remoteTime = stamp(data.updatedAt || remote.updatedAt || remote.createdAt);
-    if (localTime >= remoteTime) {
-      await uploadStoreRecord(storeName, local, nowIso());
-    } else {
-      const normalized = { ...remote, updatedAt: remote.updatedAt || data.updatedAt || nowIso() };
-      await putStoreRecord(storeName, normalized);
-    }
+    if (localTime >= remoteTime) await uploadStoreRecord(storeName, local, nowIso());
+    else await putStoreRecord(storeName, { ...remote, updatedAt: remote.updatedAt || data.updatedAt || nowIso() });
   }
   try {
     window.dispatchEvent(new CustomEvent("papelegruba:data-change", { detail: { collection: storeName, remote: true } }));
@@ -393,17 +409,73 @@ async function applyStoreSnapshot(storeName, snapshot) {
 async function syncStore(storeName) {
   setSyncStatus("connecting", "Papelegruba · sincronizando " + storeName + "…");
   const [allLocalRecords, cloudSnapshot] = await Promise.all([readStore(storeName), getDocs(otherCols[storeName])]);
-  const localRecords = allLocalRecords.filter(record => !isLocalOnlySetting(storeName, recordKey(storeName, record)));
-  const cloudByKey = new Map(cloudSnapshot.docs
-    .filter(item => !isLocalOnlySetting(storeName, item.data()?.key ?? decodeURIComponent(item.id)))
-    .map(item => [String(item.data()?.key ?? decodeURIComponent(item.id)), item]));
-  const localKeys = new Set();
+  let localRecords = allLocalRecords.filter(record => !isLocalOnlySetting(storeName, recordKey(storeName, record)));
+
+  // Primero limpia copias locales exactas. Se conservan las más recientes y las demás
+  // quedan recuperables en la papelera durante siete días.
+  const localGroups = new Map();
+  for (const record of localRecords) {
+    const fingerprint = storeFingerprint(storeName, record);
+    if (!fingerprint) continue;
+    if (!localGroups.has(fingerprint)) localGroups.set(fingerprint, []);
+    localGroups.get(fingerprint).push(record);
+  }
+  const removedLocalKeys = new Set();
+  for (const group of localGroups.values()) {
+    if (group.length < 2) continue;
+    group.sort((a, b) => stamp(b.updatedAt || b.createdAt) - stamp(a.updatedAt || a.createdAt));
+    for (const duplicate of group.slice(1)) {
+      const key = recordKey(storeName, duplicate);
+      if (key == null) continue;
+      await moveToTrash(storeName, duplicate);
+      removedLocalKeys.add(key);
+      await setDoc(userDoc("sync_" + storeName, cloudKey(key)), {
+        key, deleted: true, updatedAt: nowIso(), schemaVersion: 1
+      });
+    }
+  }
+  localRecords = localRecords.filter(record => !removedLocalKeys.has(recordKey(storeName, record)));
+
+  const validCloudDocs = cloudSnapshot.docs.filter(item =>
+    !isLocalOnlySetting(storeName, item.data()?.key ?? decodeURIComponent(item.id))
+  );
+  const localKeys = new Set(localRecords.map(record => recordKey(storeName, record)).filter(key => key != null));
+  const remoteGroups = new Map();
+  for (const item of validCloudDocs) {
+    const data = item.data() || {};
+    if (data.deleted === true || !data.record) continue;
+    const fingerprint = storeFingerprint(storeName, data.record);
+    if (!fingerprint) continue;
+    if (!remoteGroups.has(fingerprint)) remoteGroups.set(fingerprint, []);
+    remoteGroups.get(fingerprint).push(item);
+  }
+  const tombstonedRemoteKeys = new Set();
+  for (const group of remoteGroups.values()) {
+    if (group.length < 2) continue;
+    group.sort((a, b) => {
+      const keyA = String(a.data()?.key ?? decodeURIComponent(a.id));
+      const keyB = String(b.data()?.key ?? decodeURIComponent(b.id));
+      const localPreference = Number(localKeys.has(keyB)) - Number(localKeys.has(keyA));
+      if (localPreference) return localPreference;
+      return stamp(b.data()?.updatedAt || b.data()?.record?.updatedAt) - stamp(a.data()?.updatedAt || a.data()?.record?.updatedAt);
+    });
+    for (const duplicate of group.slice(1)) {
+      const key = String(duplicate.data()?.key ?? decodeURIComponent(duplicate.id));
+      tombstonedRemoteKeys.add(key);
+      await setDoc(userDoc("sync_" + storeName, cloudKey(key)), {
+        key, deleted: true, updatedAt: nowIso(), schemaVersion: 1
+      });
+    }
+  }
+
+  const cloudByKey = new Map(validCloudDocs.map(item => [
+    String(item.data()?.key ?? decodeURIComponent(item.id)), item
+  ]));
   for (const local of localRecords) {
     const key = recordKey(storeName, local);
     if (key == null) continue;
-    localKeys.add(key);
     const remoteDoc = cloudByKey.get(key);
-    if (!remoteDoc) {
+    if (!remoteDoc || tombstonedRemoteKeys.has(key)) {
       await uploadStoreRecord(storeName, local);
       continue;
     }
@@ -423,15 +495,30 @@ async function syncStore(storeName) {
     if (localTime >= remoteTime) await uploadStoreRecord(storeName, local, nowIso());
     else await putStoreRecord(storeName, { ...remote, updatedAt: remote.updatedAt || remoteData.updatedAt || nowIso() });
   }
-  // Solo se importan registros remotos que no existen localmente; no se borran datos
-  // locales por el hecho de que una colección remota esté vacía.
-  for (const remoteDoc of cloudSnapshot.docs) {
+
+  // Si una copia remota tiene otro ID pero el mismo contenido, se asocia al registro
+  // local canónico en lugar de importarla como un segundo elemento.
+  for (const remoteDoc of validCloudDocs) {
     const data = remoteDoc.data() || {};
     const key = String(data.key ?? decodeURIComponent(remoteDoc.id));
-    if (isLocalOnlySetting(storeName, key)) continue;
-    if (localKeys.has(key)) continue;
-    if (data.deleted === true) continue;
-    if (data.record && typeof data.record === "object") await putStoreRecord(storeName, data.record);
+    if (isLocalOnlySetting(storeName, key) || localKeys.has(key) || tombstonedRemoteKeys.has(key) || data.deleted === true) continue;
+    if (!data.record || typeof data.record !== "object") continue;
+    const fingerprint = storeFingerprint(storeName, data.record);
+    const equivalent = fingerprint ? localRecords.find(item => storeFingerprint(storeName, item) === fingerprint) : null;
+    if (equivalent) {
+      const localKey = recordKey(storeName, equivalent);
+      const localTime = stamp(equivalent.updatedAt || equivalent.createdAt);
+      const remoteTime = stamp(data.updatedAt || data.record.updatedAt || data.record.createdAt);
+      if (remoteTime > localTime) {
+        await putStoreRecord(storeName, { ...data.record, id: localKey, updatedAt: data.record.updatedAt || data.updatedAt || nowIso() });
+      }
+      await setDoc(userDoc("sync_" + storeName, cloudKey(key)), {
+        key, deleted: true, updatedAt: nowIso(), schemaVersion: 1
+      });
+      continue;
+    }
+    await putStoreRecord(storeName, data.record);
+    localKeys.add(key);
   }
 }
 async function syncTrashTombstones() {
