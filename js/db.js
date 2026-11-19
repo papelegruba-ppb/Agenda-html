@@ -171,7 +171,7 @@ function stableRecordValue(value) {
   if (Array.isArray(value)) return value.map(stableRecordValue);
   if (value && typeof value === "object") {
     return Object.fromEntries(Object.keys(value).sort().filter(key =>
-      !["id", "createdAt", "updatedAt", "modifiedAt", "syncedAt", "doneAt"].includes(key) &&
+      !["id", "createdAt", "updatedAt", "modifiedAt", "syncedAt"].includes(key) &&
       !/^(gcal|gtask|sync)/i.test(key)
     ).map(key => [key, stableRecordValue(value[key])]));
   }
@@ -444,14 +444,16 @@ function backupRecordName(collection, item) {
 }
 function backupDuplicateKey(collection, item) {
   const name = backupRecordName(collection, item);
-  if (!name) return "";
   if (collection === "tasks") {
-    const date = normalizeDuplicateText(item.date || item.dueDate || item.startDate || item.startAt || "");
+    if (!name) return "";
+    const date = String(item.date || item.dueDate || item.startDate || item.startAt || "").slice(0, 10);
     const notes = normalizeDuplicateText(item.notes || item.note || item.description || "");
-    return [name, date, notes].join("|");
+    return [name, date, notes, item.type || "personal", item.isChecklist === true].join("|");
   }
-  if (collection === "projects" || collection === "habits" || collection === "notes") return name;
-  return name + "|" + String(item.date || item.startAt || item.createdAt || "");
+  if (["projects", "habits", "notes", "sessions", "payments"].includes(collection)) {
+    return JSON.stringify(stableRecordValue(item));
+  }
+  return "";
 }
 export async function mergeBackupData(data) {
   const db = await initDB();
