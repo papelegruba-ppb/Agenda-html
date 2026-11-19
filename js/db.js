@@ -179,7 +179,8 @@ function stableRecordValue(value) {
 }
 function isChecklistRecord(item) {
   return item?.isChecklist === true || (!item?.date && !item?.gcalEventId && (item?.type || "personal") !== "medical");
-}\nfunction localDuplicateFingerprint(collection, item) {
+}
+function localDuplicateFingerprint(collection, item) {
   if (collection === "tasks") {
     const title = duplicateText(item?.title || item?.name);
     if (!title) return "";
