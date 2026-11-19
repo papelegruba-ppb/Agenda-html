@@ -164,8 +164,8 @@ export async function getAllTasks() {
 
 
 function duplicateText(value) {
-  return String(value ?? "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "")
-    .toLocaleLowerCase("es").replace(/\\s+/g, " ").trim();
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es").replace(/\s+/g, " ").trim();
 }
 function stableRecordValue(value) {
   if (Array.isArray(value)) return value.map(stableRecordValue);
