@@ -18,5 +18,5 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Comprobar sintaxis
         run: npm run check
-      - name: Probar migración, salud, hábitos y backup
+      - name: Probar migración, deduplicación, hábitos y backup
         run: npm test
