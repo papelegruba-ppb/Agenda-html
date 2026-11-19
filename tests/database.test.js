@@ -95,6 +95,8 @@ test("migra v2 a v4 sin borrar datos y permite CRUD, conversión idempotente y b
   assert.ok((await getAllSessions()).some(item => item.id === "backup-session"));
   assert.ok((await getAllPayments()).some(item => item.id === "backup-payment"));
   assert.ok((await getAllSettings()).some(item => item.key === "backupSetting"));
+  assert.ok(!(await getAllHealthEpisodes()).some(item => item.id === "backup-episode"));
+  assert.ok(!(await getAllMedicationIntakes()).some(item => item.id === "backup-intake"));
 
 
   // La limpieza conserva los registros con notas distintas y mueve copias exactas a la papelera.
