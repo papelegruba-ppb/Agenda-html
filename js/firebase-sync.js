@@ -357,7 +357,7 @@ async function uploadStoreRecord(storeName, record, forcedUpdatedAt = null) {
   if (record.updatedAt !== updatedAt) await putStoreRecord(storeName, normalized);
 }
 async function applyStoreSnapshot(storeName, snapshot) {
-  const localRecords = (await readStore(storeName)).filter(record => !isLocalOnlySetting(storeName, recordKey(storeName, record)));
+  let localRecords = (await readStore(storeName)).filter(record => !isLocalOnlySetting(storeName, recordKey(storeName, record)));
   const localByKey = new Map(localRecords.map(record => [recordKey(storeName, record), record]).filter(([key]) => key != null));
   for (const change of snapshot.docChanges()) {
     const data = change.doc.data() || {};
@@ -394,6 +394,8 @@ async function applyStoreSnapshot(storeName, snapshot) {
     }
     if (!local) {
       await putStoreRecord(storeName, remote);
+      localRecords.push(remote);
+      localByKey.set(key, remote);
       continue;
     }
     if (stableJSON(local) === stableJSON(remote)) continue;
