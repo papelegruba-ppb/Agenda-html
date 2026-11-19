@@ -15,7 +15,7 @@ const timestamp = value => value ? Date.parse(value) || 0 : 0;
 const nowIso = () => new Date().toISOString();
 
 function eventFingerprint(task) {
-  return JSON.stringify([String(task.title || "").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").trim().toLocaleLowerCase("es").replace(/\\s+/g, " "), task.date || "", task.time || "", String(task.notes || "").replace(/\\r\\n?/g, "\\n").trim()]);
+  return JSON.stringify([String(task.title || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("es").replace(/\s+/g, " "), task.date || "", task.time || "", String(task.notes || "").replace(/\r\n?/g, "\n").trim()]);
 }
 
 function calendarPayload(task) {
