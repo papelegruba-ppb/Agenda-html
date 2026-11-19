@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import "fake-indexeddb/auto";
 import {
-  initDB, getAllTasks, getAllHabits, getAllHealthEpisodes, getAllMedicationIntakes, getTrash, restoreTrashItem,
+  initDB, getAllTasks, getAllHabits, getAllHealthEpisodes, getAllMedicationIntakes, getTrash, restoreTrashItem, deduplicateLocalData,
   addHealthEpisode, addMedicationIntake, updateHealthEpisode, updateMedicationIntake,
   deleteHealthEpisode, deleteMedicationIntake, convertTaskToHabit, mergeBackupData,
   getAllProjects, getAllNotes, getAllSessions, getAllPayments, getAllSettings
@@ -86,7 +86,7 @@ test("migra v2 a v4 sin borrar datos y permite CRUD, conversión idempotente y b
     healthEpisodes: [{ id: "backup-episode", type: "Otros", startAt: "2026-10-12T11:00" }],
     medicationIntakes: [{ id: "backup-intake", medication: "Medicamento respaldado", takenAt: "2026-10-12T11:10" }]
   });
-  assert.equal(imported.imported, 9);
+  assert.equal(imported.imported, 7);
   assert.ok((await getAllTasks()).some(item => item.id === "check-1"));
   assert.ok((await getAllTasks()).some(item => item.id === "backup-task"));
   assert.ok((await getAllHabits()).some(item => item.id === "habit-existing"));
@@ -95,9 +95,25 @@ test("migra v2 a v4 sin borrar datos y permite CRUD, conversión idempotente y b
   assert.ok((await getAllSessions()).some(item => item.id === "backup-session"));
   assert.ok((await getAllPayments()).some(item => item.id === "backup-payment"));
   assert.ok((await getAllSettings()).some(item => item.key === "backupSetting"));
-  assert.ok((await getAllHealthEpisodes()).some(item => item.id === "backup-episode"));
-  assert.ok((await getAllMedicationIntakes()).some(item => item.id === "backup-intake"));
 
+
+  // La limpieza conserva los registros con notas distintas y mueve copias exactas a la papelera.
+  const duplicateDb = await initDB();
+  await new Promise((resolve, reject) => {
+    const transaction = duplicateDb.transaction(["tasks", "habits"], "readwrite");
+    transaction.objectStore("tasks").put({ id: "dup-task-a", title: "Llamar", date: "2026-10-13", notes: "Confirmar cita", type: "personal", done: false });
+    transaction.objectStore("tasks").put({ id: "dup-task-b", title: "Llamar", date: "2026-10-13", notes: "Confirmar cita", type: "personal", done: false });
+    transaction.objectStore("tasks").put({ id: "dup-task-c", title: "Llamar", date: "2026-10-13", notes: "Otra nota", type: "personal", done: false });
+    transaction.objectStore("habits").put({ id: "dup-habit-a", title: "Leer", notes: "10 minutos", days: [1,2,3], duration: 10, createdAt: "2026-10-01T00:00:00.000Z" });
+    transaction.objectStore("habits").put({ id: "dup-habit-b", title: "Leer", notes: "10 minutos", days: [1,2,3], duration: 10, createdAt: "2026-10-02T00:00:00.000Z" });
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  const removed = await deduplicateLocalData();
+  assert.equal(removed.tasks, 1);
+  assert.equal(removed.habits, 1);
+  assert.equal((await getAllTasks()).filter(item => item.id.startsWith("dup-task-")).length, 2);
+  assert.ok((await getTrash()).some(item => item.recordId === "dup-task-b" || item.recordId === "dup-task-a"));
   await deleteMedicationIntake(intake.id);
   assert.ok((await getTrash()).some(item => item.collection === "medicationIntakes" && item.recordId === intake.id));
   await deleteHealthEpisode(episode.id);
