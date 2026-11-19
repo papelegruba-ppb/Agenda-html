@@ -144,6 +144,7 @@ function normalizeCloudTask(id, raw) {
     notes: raw?.notas || raw?.notes || "",
     type: raw?.tipo || raw?.type || "personal",
     gcalEventId: raw?.gcalEventId || null,
+    isChecklist: raw?.isChecklist === true || (!raw?.fecha && !raw?.date && !raw?.gcalEventId && (raw?.tipo || raw?.type || "personal") !== "medical"),
     updatedAt: raw?.updatedAt || null
   };
 }
