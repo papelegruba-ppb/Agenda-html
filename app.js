@@ -1,4 +1,4 @@
-import { initDB } from "./js/db.js";
+import { initDB, deduplicateLocalData } from "./js/db.js";
 import { renderYear } from "./js/views/year.js";
 import { renderMonth } from "./js/views/month.js";
 import { renderWeek } from "./js/views/week.js";
@@ -9,7 +9,6 @@ import { renderProjects } from "./js/views/projects.js";
 import { renderHabits } from "./js/views/habits.js";
 import { renderSettings } from "./js/views/settings.js";
 import { renderMedical } from "./js/views/medical.js";
-import { renderHealth } from "./js/views/health.js";
 import { getActiveTimer, getElapsedMs, formatElapsed, onChange } from "./js/hours.js";
 
 // IMPORTAMOS FIREBASE (El nuevo sistema de sincronización instantánea)
@@ -30,7 +29,6 @@ const views = {
   habits: renderHabits,
   settings: renderSettings,
   medical: renderMedical,
-  health: renderHealth
 };
 
 const root = document.getElementById("view-root");
@@ -97,7 +95,11 @@ onChange(updateFloatingBadge);
 (async () => {
   try {
     await initDB();
-    
+    const removedDuplicates = await deduplicateLocalData();
+    if (Object.keys(removedDuplicates).length) {
+      console.info("Duplicados exactos enviados a la papelera:", removedDuplicates);
+    }
+
     // ARRANCAMOS FIREBASE Y SUBIMOS LAS TAREAS LOCALES
     try {
       await subirTareasLocalesIniciales();

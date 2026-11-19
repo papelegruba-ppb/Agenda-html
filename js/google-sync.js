@@ -15,7 +15,7 @@ const timestamp = value => value ? Date.parse(value) || 0 : 0;
 const nowIso = () => new Date().toISOString();
 
 function eventFingerprint(task) {
-  return [String(task.title || "").trim().toLocaleLowerCase(), task.date || "", task.time || ""].join("|");
+  return JSON.stringify([String(task.title || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLocaleLowerCase("es").replace(/\s+/g, " "), task.date || "", task.time || "", String(task.notes || "").replace(/\r\n?/g, "\n").trim()]);
 }
 
 function calendarPayload(task) {
@@ -232,6 +232,24 @@ async function syncCalendar(localTasks) {
     from: "2020-01-01T00:00:00Z",
     to: new Date(Date.now() + 5 * 365 * 864e5).toISOString()
   });
+  // Google Calendar puede contener copias con IDs distintos. Conserva la versión
+  // más reciente de cada evento idéntico y elimina las copias remotas exactas.
+  const remoteGroups = new Map();
+  for (const event of remoteEvents) {
+    const fingerprint = eventFingerprint(gcalEventToTask(event));
+    if (!remoteGroups.has(fingerprint)) remoteGroups.set(fingerprint, []);
+    remoteGroups.get(fingerprint).push(event);
+  }
+  const uniqueRemoteEvents = [];
+  for (const group of remoteGroups.values()) {
+    group.sort((a, b) => timestamp(b.updated) - timestamp(a.updated));
+    uniqueRemoteEvents.push(group[0]);
+    for (const duplicate of group.slice(1)) {
+      try { await deleteCalendarEvent(duplicate.id); }
+      catch (error) { console.warn("No se pudo eliminar un evento duplicado de Calendar:", error?.message || error); uniqueRemoteEvents.push(duplicate); }
+    }
+  }
+  remoteEvents.splice(0, remoteEvents.length, ...uniqueRemoteEvents);
   const remoteById = new Map(remoteEvents.map(event => [event.id, event]));
   const localEvents = localTasks.filter(task => !isChecklist(task) && task.date);
   const linked = localEvents.filter(task => task.gcalEventId);
@@ -335,7 +353,7 @@ export function installGoogleSyncListeners() {
         } else {
           // NUEVO: Comprobación para no duplicar en Calendar
           const existentes = await listEvents({ timeMin: task.date + "T00:00:00Z", timeMax: task.date + "T23:59:59Z" });
-          const eventoIgual = (existentes.items || []).find(e => e.summary?.trim().toLowerCase() === task.title?.trim().toLowerCase());
+          const eventoIgual = (existentes.items || []).find(e => eventFingerprint(gcalEventToTask(e)) === eventFingerprint(task));
           if (eventoIgual) {
             await saveLocal(task, { gcalEventId: eventoIgual.id, gcalUpdated: eventoIgual.updated || nowIso(), gcalSyncedAt: nowIso() });
           } else {

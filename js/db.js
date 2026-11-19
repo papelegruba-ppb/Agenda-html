@@ -162,6 +162,67 @@ export async function getAllTasks() {
   });
 }
 
+
+function duplicateText(value) {
+  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLocaleLowerCase("es").replace(/\s+/g, " ").trim();
+}
+function stableRecordValue(value) {
+  if (Array.isArray(value)) return value.map(stableRecordValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().filter(key =>
+      !["id", "createdAt", "updatedAt", "modifiedAt", "syncedAt"].includes(key) &&
+      !/^(gcal|gtask|sync)/i.test(key)
+    ).map(key => [key, stableRecordValue(value[key])]));
+  }
+  return value;
+}
+function localDuplicateFingerprint(collection, item) {
+  if (collection === "tasks") {
+    const title = duplicateText(item?.title || item?.name);
+    if (!title) return "";
+    return JSON.stringify([title, String(item?.date || item?.dueDate || "").slice(0, 10),
+      duplicateText(item?.notes || item?.note || item?.description), item?.type || "personal", item?.isChecklist === true]);
+  }
+  const meaningful = stableRecordValue(item || {});
+  if (!Object.keys(meaningful).length) return "";
+  return JSON.stringify(meaningful);
+}
+
+// Deduplicación conservadora: solo elimina copias equivalentes dentro de la misma pestaña.
+// Los registros descartados pasan a la papelera durante 7 días para poder recuperarlos.
+export async function deduplicateLocalData() {
+  const collections = ["tasks", "habits", "projects", "notes", "sessions", "payments"];
+  const removed = {};
+  for (const collection of collections) {
+    const db = await initDB();
+    const records = await new Promise((resolve, reject) => {
+      const req = db.transaction(collection, "readonly").objectStore(collection).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+    const groups = new Map();
+    for (const record of records) {
+      const fingerprint = localDuplicateFingerprint(collection, record);
+      if (!fingerprint) continue;
+      if (!groups.has(fingerprint)) groups.set(fingerprint, []);
+      groups.get(fingerprint).push(record);
+    }
+    const duplicates = [];
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      group.sort((a, b) => Date.parse(b.updatedAt || b.createdAt || 0) - Date.parse(a.updatedAt || a.createdAt || 0));
+      duplicates.push(...group.slice(1));
+    }
+    for (const duplicate of duplicates) {
+      await moveToTrash(collection, duplicate);
+      if (collection === "tasks") emitTaskChange("delete", duplicate);
+    }
+    if (duplicates.length) removed[collection] = duplicates.length;
+  }
+  return removed;
+}
+
 export async function getMedicalInRange(fromStr, toStr) {
   const db = await initDB();
   return new Promise((resolve, reject) => {
@@ -383,18 +444,20 @@ function backupRecordName(collection, item) {
 }
 function backupDuplicateKey(collection, item) {
   const name = backupRecordName(collection, item);
-  if (!name) return "";
   if (collection === "tasks") {
-    const date = normalizeDuplicateText(item.date || item.dueDate || item.startDate || item.startAt || "");
+    if (!name) return "";
+    const date = String(item.date || item.dueDate || item.startDate || item.startAt || "").slice(0, 10);
     const notes = normalizeDuplicateText(item.notes || item.note || item.description || "");
-    return [name, date, notes].join("|");
+    return [name, date, notes, item.type || "personal", item.isChecklist === true].join("|");
   }
-  if (collection === "projects" || collection === "habits" || collection === "notes") return name;
-  return name + "|" + String(item.date || item.startAt || item.createdAt || "");
+  if (["projects", "habits", "notes", "sessions", "payments"].includes(collection)) {
+    return JSON.stringify(stableRecordValue(item));
+  }
+  return "";
 }
 export async function mergeBackupData(data) {
   const db = await initDB();
-  const storeNames = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "healthEpisodes", "medicationIntakes", "trash"];
+  const storeNames = ["tasks", "habits", "projects", "notes", "sessions", "payments", "settings", "trash"];
   const payload = Object.fromEntries(storeNames.map(name => [name, Array.isArray(data?.[name]) ? data[name] : []]));
   return new Promise((resolve, reject) => {
     const t = db.transaction(storeNames, "readwrite");
@@ -436,7 +499,7 @@ export async function mergeBackupData(data) {
 }
 export async function replaceSyncedCollections(data) {
   const db = await initDB();
-  const names = ["tasks", "habits", "projects", "notes", "sessions", "payments", "healthEpisodes", "medicationIntakes", "trash"];
+  const names = ["tasks", "habits", "projects", "notes", "sessions", "payments", "trash"];
   return new Promise((resolve, reject) => {
     const t = db.transaction(names, "readwrite");
     let count = 0;

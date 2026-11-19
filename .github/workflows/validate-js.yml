@@ -2,7 +2,7 @@ name: Validar JavaScript y datos
 
 on:
   push:
-    branches: ["main", "feature/control-salud-backup-completo"]
+    branches: ["main", "feature/control-salud-backup-completo", "fix/remove-health-dedupe-sync"]
   pull_request:
     branches: ["main"]
 
@@ -18,5 +18,5 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Comprobar sintaxis
         run: npm run check
-      - name: Probar migración, salud, hábitos y backup
+      - name: Probar migración, deduplicación, hábitos y backup
         run: npm test
