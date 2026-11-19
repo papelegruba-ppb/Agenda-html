@@ -182,7 +182,7 @@ function localDuplicateFingerprint(collection, item) {
     const title = duplicateText(item?.title || item?.name);
     if (!title) return "";
     return JSON.stringify([title, String(item?.date || item?.dueDate || "").slice(0, 10),
-      duplicateText(item?.notes || item?.note || item?.description), item?.type || "personal", item?.isChecklist === true]);
+      duplicateText(item?.notes || item?.note || item?.description), item?.isChecklist === true]);
   }
   const meaningful = stableRecordValue(item || {});
   if (!Object.keys(meaningful).length) return "";
@@ -448,7 +448,7 @@ function backupDuplicateKey(collection, item) {
     if (!name) return "";
     const date = String(item.date || item.dueDate || item.startDate || item.startAt || "").slice(0, 10);
     const notes = normalizeDuplicateText(item.notes || item.note || item.description || "");
-    return [name, date, notes, item.type || "personal", item.isChecklist === true].join("|");
+    return [name, date, notes, item.isChecklist === true].join("|");
   }
   if (["projects", "habits", "notes", "sessions", "payments"].includes(collection)) {
     return JSON.stringify(stableRecordValue(item));
