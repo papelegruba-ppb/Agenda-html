@@ -125,7 +125,7 @@ function taskFingerprint(task) {
     normalize(task?.title),
     String(task?.date || "").slice(0, 10),
     normalize(task?.notes),
-    task?.isChecklist === true
+    task?.isChecklist === true || (!task?.date && !task?.gcalEventId && (task?.type || "personal") !== "medical")
   ]);
 }
 
