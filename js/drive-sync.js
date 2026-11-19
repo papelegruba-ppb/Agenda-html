@@ -2,7 +2,7 @@ import { GOOGLE_CLIENT_ID } from "../config.js";
 import { getActiveTimer } from "./hours.js";
 import {
   getAllTasks, getAllHabits, getAllProjects, getAllNotes, getAllSessions,
-  getAllPayments, getTrash,
+  getAllPayments, getTrash, deduplicateLocalData,
   getSetting, setSetting, replaceSyncedCollections
 } from "./db.js";
 
@@ -310,7 +310,7 @@ function planMerge(local, remote, base) {
       if (name !== "trash" && name !== "appState" && localTrashKeys.has(key) && l === undefined) continue;
       // Si el dispositivo local tiene el registro activo, una papelera remota antigua
       // no debe deshacer una restauración hecha en Agenda HTML.
-      if (l === undefined && r === undefined) { if (b !== undefined && !localTrashKeys.has(key)) out.set(id, b); continue; }
+      if (l === undefined && r === undefined) { if (b !== undefined && !localTrashKeys.has(key) && !remoteTrashKeys.has(key)) out.set(id, b); continue; }
       if (l === undefined) {
         if (name !== "trash" && name !== "appState" && (localTrashKeys.has(key) || remoteTrashKeys.has(key))) continue;
         if (r !== undefined) out.set(id, r);
@@ -406,6 +406,9 @@ export async function applyDriveSync(plan) {
   // Write cloud first. If the local write fails, the next preview can recover the remote changes.
   await uploadEnvelope(latest.file, plan.merged);
   await replaceSyncedCollections(plan.merged);
+  // La nube puede contener copias antiguas con IDs diferentes: aplica la misma
+  // deduplicación conservadora de la agenda y conserva las descartadas en papelera.
+  await deduplicateLocalData();
   // Restaurar el cronómetro activo y el saldo inicial desde el estado sincronizado.
   const appState = new Map((plan.merged.appState || []).map(item => [item.id, item.value]));
   if (appState.has("activeTimer")) {
